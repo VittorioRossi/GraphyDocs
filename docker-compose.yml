@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+ frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes: 
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - graphynet
+    depends_on:
+      backend:
+        condition: service_healthy
+
+ backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000" 
+    volumes:
+      - ./backend:/app
+    env_file:
+        - ./backend/.env
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - graphynet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+ neo4j:
+    image: neo4j:5.12.0
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/graphydocs
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - graphynet
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+ postgres:
+    image: postgres:15
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=graphydb
+      - POSTGRES_USER=graphy
+      - POSTGRES_PASSWORD=graphydocs
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - graphynet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graphy -d graphydb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+ redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - graphynet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s  
+volumes:
+ neo4j_data:
+ neo4j_logs:
+ postgres_data:
+ redis_data:
+
+networks:
+ graphynet:
