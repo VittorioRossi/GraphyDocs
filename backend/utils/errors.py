@@ -1,3 +1,5 @@
+from sqlalchemy.exc import SQLAlchemyError
+
 class AnalysisError(Exception):
     """Base exception for analysis errors"""
     pass

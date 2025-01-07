@@ -6,18 +6,24 @@ from typing import List, Dict
 import uuid
 import logging
 import traceback
-from sqlalchemy.exc import SQLAlchemyError
+
 from sqlalchemy import select
 from pydantic import BaseModel
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from models.database import Project
+from models.database import get_db
+
 
 from models.project import Project
 from utils.git_clone_service import GitCloneOps, GitConfig
 from utils.file_system import FileSystemOps
-from utils.errors import GitCloneError
+from utils.errors import GitCloneError, SQLAlchemyError
 
-from models.database import get_db
+
+
+
+
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)

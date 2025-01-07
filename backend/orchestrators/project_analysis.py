@@ -28,8 +28,10 @@ from pathlib import Path
 from graph.database import get_graph_db
 from neo4j import AsyncDriver
 from algorithms.interface import GraphMapper
+from utils.logging import get_logger
 
-from uuid import UUID
+
+logger = get_logger(__name__)
 
 def convert_uuid(obj):
     """Recursively convert UUID objects to strings in nested data structures."""
@@ -41,17 +43,17 @@ def convert_uuid(obj):
         return str(obj)
     return obj
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - (name)s - (levelname)s - (message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Deactivate Neo4j debug messages
-logging.getLogger("neo4j").setLevel(logging.WARNING)
 
 class AnalysisRequest(BaseModel):
+    """
+    Analysis request configuration.
+    
+    Attributes:
+        analyzer_type: Type of analysis to perform (default: "package")
+        max_clients_per_language: Maximum number of language clients
+        client_timeout: Client timeout in seconds
+        max_retries: Maximum number of retry attempts
+    """
     analyzer_type: str = "package"
     max_clients_per_language: int = 3
     client_timeout: int = 300
@@ -518,7 +520,14 @@ class AnalysisOrchestrator:
             asyncio.create_task(self.cleanup())
 
 # Router
-router = APIRouter(prefix="/api", tags=["Analysis"])
+router = APIRouter(
+    prefix="/api/v1/analysis",
+    tags=["Analysis"],
+    responses={
+        404: {"description": "Analysis not found"},
+        500: {"description": "Internal server error"}
+    }
+)
 
 async def get_orchestrator(
     db: AsyncSession = Depends(get_db),
@@ -541,15 +550,31 @@ async def websocket_endpoint(
     websocket: WebSocket, 
     orchestrator: AnalysisOrchestrator = Depends(get_orchestrator)
 ):
+    """
+    WebSocket endpoint for real-time analysis updates.
+    
+    Handles:
+    - Initial connection
+    - Analysis status updates
+    - Error notifications
+    - Client disconnection
+    """
     try:
         await orchestrator.handle_new_connection(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
     finally:
         await orchestrator.cleanup()
-        logger.info("WebSocket connection cleaned up")
 
-@router.get("/jobs/{job_id}/status")
+@router.get("/jobs/{job_id}/status",
+    summary="Get Job Status",
+    description="Get the current status of an analysis job",
+    response_description="Current job status and progress",
+    responses={
+        200: {"description": "Job status retrieved successfully"},
+        404: {"description": "Job not found"},
+        500: {"description": "Internal server error"}
+    })
 async def get_job_status(
     job_id: UUID,
     orchestrator: AnalysisOrchestrator = Depends(get_orchestrator)
@@ -558,19 +583,25 @@ async def get_job_status(
     Get the current status of an analysis job.
     
     Args:
-        job_id (UUID): The ID of the job to check
-        orchestrator (AnalysisOrchestrator): Dependency injected orchestrator
+        job_id: The ID of the job to check
+        orchestrator: Dependency injected orchestrator
     
     Returns:
-        Job: Object containing:
-            - status: current job status ('pending'|'running'|'completed'|'error')
-            - progress: completion percentage (0-100)
-            - message: current operation description
+        Dict containing:
+            - status: current job status
+            - progress: completion percentage
+            - message: operation description
             - error: error message if status is 'error'
-            - created_at: job creation timestamp
-            - updated_at: last update timestamp
+            - timestamps: creation and update times
     
     Raises:
-        HTTPException: If job_id doesn't exist
+        HTTPException: If job_id doesn't exist or server error occurs
     """
-    return await orchestrator.job_handler.get_job(job_id)
+    try:
+        return await orchestrator.job_handler.get_job(job_id)
+    except Exception as e:
+        logger.error(f"Error getting job status: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get job status: {str(e)}"
+        )

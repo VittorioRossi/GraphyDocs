@@ -1,18 +1,19 @@
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-import logging
 import os
+
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class Base(DeclarativeBase):
     pass
 
-logger = logging.getLogger(__name__)
-logger.disabled = True
 
 db_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://graphy:graphydocs@postgres:5432/graphydb")
 
-def get_session_maker(db_url: str):
+def get_session_maker(db_url: str = db_url):
     # Convert standard PostgreSQL URL to async format if needed
     if db_url.startswith('postgresql://'):
         db_url = db_url.replace('postgresql://', 'postgresql+asyncpg://', 1)

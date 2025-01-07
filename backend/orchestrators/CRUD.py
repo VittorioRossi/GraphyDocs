@@ -1,171 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from typing import Dict, List
 from datetime import datetime
-import logging
-from pydantic import BaseModel
+from typing import Dict, List
 from uuid import UUID
-from graph.graph_manager import CodeGraphManager
+
+from fastapi import APIRouter, Depends, HTTPException
 from neo4j import AsyncDriver
+from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from graph.database import get_graph_db
-
+from graph.graph_manager import CodeGraphManager
 from models.database import get_db
-import os
+from utils.logging import get_logger
 
-tags_metadata = [
-    {
-        "name": "health",
-        "description": "System health check operations",
-    },
-    {
-        "name": "databases",
-        "description": "Database-specific health checks",
-    },
-    {
-        "name": "management",
-        "description": "System management operations",
-    }
-]
+logger = get_logger(__name__)
 
-router = APIRouter(
-    prefix="/api/v1/health",  # Added trailing slash
-    tags=["health"]
-)
-
-logger = logging.getLogger(__name__)
 
 class CleanupRequest(BaseModel):
+    """Request model for database cleanup."""
     confirmation: str
 
-# Add new router for management operations
-management_router = APIRouter(
-    prefix="/api/v1/manage",  # Added trailing slash
+# Router configuration
+router = APIRouter(
+    prefix="/api/v1/manage",
     tags=["management"]
 )
 
-async def check_postgres_connection(session: AsyncSession) -> Dict:
-    try:
-        # Test query
-        result = await session.execute(text("SELECT 1"))
-        value = result.scalar()  # Remove await here
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "database": "postgresql"
-        }
-    except Exception as e:
-        logger.error(f"PostgreSQL health check failed: {str(e)}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat(),
-            "database": "postgresql"
-        }
-
-async def check_neo4j_connection(driver: AsyncDriver) -> Dict:
-    try:
-        async with driver.session() as session:
-            await session.run("RETURN 1")
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "database": "neo4j"
-        }
-    except Exception as e:
-        logger.error(f"Neo4j health check failed: {str(e)}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now().isoformat(),
-            "database": "neo4j"
-        }
-
-@router.get("/", 
-    summary="System Health Check",
-    description="Check the health status of all system components",
-    response_description="Health status of all system components",
-    tags=["health"],
-    responses={
-        200: {"description": "System health status"},
-        500: {"description": "Internal server error"}
-    })
-async def health_check(
-    db: AsyncSession = Depends(get_db),
-    neo4j: AsyncDriver = Depends(get_graph_db)
-) -> Dict:
-    """
-    Performs a complete system health check.
-    
-    Returns:
-        Dict containing health status of all system components
-    """
-    postgres_status = await check_postgres_connection(db)
-    neo4j_status = await check_neo4j_connection(neo4j)
-    
-    overall_status = "healthy" if all(
-        status["status"] == "healthy" 
-        for status in [postgres_status, neo4j_status]
-    ) else "unhealthy"
-    
-    return {
-        "status": overall_status,
-        "timestamp": datetime.now().isoformat(),
-        "services": {
-            "postgresql": postgres_status,
-            "neo4j": neo4j_status
-        }
-    }
-
-@router.get("/postgres",
-    summary="PostgreSQL Health Check",
-    description="Check PostgreSQL database connection and status",
-    response_description="PostgreSQL database health status",
-    tags=["databases"],
-    responses={
-        200: {"description": "Database is healthy"},
-        503: {"description": "Database is unhealthy"}
-    })
-async def postgres_health(db: AsyncSession = Depends(get_db)) -> Dict:
-    """
-    Check PostgreSQL database health status.
-    
-    Returns:
-        Dict containing PostgreSQL health information
-    
-    Raises:
-        HTTPException: If database is unhealthy
-    """
-    status = await check_postgres_connection(db)
-    if status["status"] == "unhealthy":
-        raise HTTPException(status_code=503, detail=status)
-    return status
-
-@router.get("/neo4j",
-    summary="Neo4j Health Check",
-    description="Check Neo4j database connection and status",
-    response_description="Neo4j database health status",
-    tags=["databases"],
-    responses={
-        200: {"description": "Database is healthy"},
-        503: {"description": "Database is unhealthy"}
-    })
-async def neo4j_health(neo4j: AsyncDriver = Depends(get_graph_db)) -> Dict:
-    """
-    Check Neo4j database health status.
-    
-    Returns:
-        Dict containing Neo4j health information
-    
-    Raises:
-        HTTPException: If database is unhealthy
-    """
-    status = await check_neo4j_connection(neo4j)
-    if status["status"] == "unhealthy":
-        raise HTTPException(status_code=503, detail=status)
-    return status
-
-@management_router.get("/sessions",
+@router.get("/sessions",
     summary="List Active Sessions",
     description="Get all active analysis sessions",
     response_description="List of active sessions",
@@ -184,7 +45,7 @@ async def list_sessions(db: AsyncSession = Depends(get_db)) -> List[Dict]:
     rows = result.mappings().all()
     return [dict(row) for row in rows]
 
-@management_router.get("/projects",
+@router.get("/projects",
     summary="List Projects",
     description="Get all projects",
     response_description="List of projects",
@@ -205,7 +66,7 @@ async def list_projects(db: AsyncSession = Depends(get_db)) -> List[Dict]:
     rows = result.mappings().all()
     return [dict(row) for row in rows]
 
-@management_router.post("/cleanup",
+@router.post("/cleanup",
     summary="Clean Databases",
     description="Clean all databases (requires confirmation)",
     response_description="Cleanup status",
@@ -253,7 +114,7 @@ async def cleanup_databases(
         )
 
 # Add statistics endpoint
-@management_router.get("/stats",
+@router.get("/stats",
     summary="System Statistics",
     description="Get system-wide statistics",
     response_description="System statistics",
@@ -306,7 +167,7 @@ async def get_statistics(
             detail=f"Failed to get statistics: {str(e)}"
         )
 
-@management_router.delete("/projects/{project_id}",
+@router.delete("/projects/{project_id}",
     summary="Delete Project",
     description="Delete a project and all its associated data",
     response_description="Deletion status",

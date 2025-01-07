@@ -22,6 +22,3 @@ class Job(Base):
 
     # Relationship to Project
     project = relationship("Project", back_populates="jobs")
-
-# Remove or rename this line if it's already defined elsewhere:
-# Project.jobs = relationship("Job", back_populates="project")
