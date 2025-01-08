@@ -1,6 +1,5 @@
 import pytest
 import pytest_asyncio
-import asyncio
 from uuid import UUID
 from unittest.mock import Mock, AsyncMock
 from fastapi import WebSocket, WebSocketDisconnect

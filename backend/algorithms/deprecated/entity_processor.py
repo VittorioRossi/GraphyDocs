@@ -9,7 +9,7 @@ from graph.graph_manager import CodeGraphManager
 from backend.analyzers.language_detector import LanguageDetector
 from lsp.language_server_manager import LanguageServerManager
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class EntityProcessor:
     CONFIG_PATTERNS = {

@@ -1,9 +1,11 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 from neo4j import AsyncDriver
-from .models import *
-import logging
+from .models import CodeNode, Edge, Project, RelationType, Node
 
-logger = logging.getLogger(__name__)
+
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class CodeGraphManager:
     def __init__(self, driver: AsyncDriver):
@@ -196,15 +198,6 @@ class CodeGraphManager:
                 "to": to_name,
                 "rel_type": rel_type.value
             })
-
-    async def get_project_entities(self, project_name: str) -> List[Dict]:
-        query = """
-        MATCH (p:Project {name: $project_name})<-[:PART_OF]-(n)
-        RETURN n
-        """
-        async with self.driver.session() as session:
-            result = await session.run(query, project_name=project_name)
-            return [dict(record["n"].items()) for record in await result.fetch()]
 
     async def get_project_relationships(self, project_name: str) -> List[Dict]:
         query = """

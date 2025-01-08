@@ -1,6 +1,6 @@
 from typing import List, Dict
 from .graph_manager import CodeGraphManager
-from .models import *
+
 
 class GraphQueries:
     def __init__(self, graph_manager: CodeGraphManager):

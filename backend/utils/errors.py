@@ -1,5 +1,3 @@
-from sqlalchemy.exc import SQLAlchemyError
-
 class AnalysisError(Exception):
     """Base exception for analysis errors"""
     pass
@@ -14,10 +12,6 @@ class JobNotFoundError(Exception):
 
 class InvalidAnalyzerError(AnalysisError):
     """Raised when analyzer type is invalid"""
-    pass
-
-class JobNotFoundError(Exception):
-    """Raised when a job is not found"""
     pass
 
 class GitCloneError(Exception):

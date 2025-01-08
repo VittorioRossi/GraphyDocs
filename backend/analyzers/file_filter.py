@@ -43,14 +43,18 @@ class FileFilter:
         filtered = []
         for file in files:
             str_path = str(file.resolve())
+            parts = str_path.split('/')
             
-            # Check exact matches
-            if any(p in str_path for p in patterns.paths):
+            # Check exact matches against each path component
+            if any(p in parts for p in patterns.paths):
                 continue
                 
-            # Check wildcard patterns
+            # Check wildcard patterns against each path component and parents
             if patterns.wildcards and any(
-                fnmatch.fnmatch(str_path, p) for p in patterns.wildcards
+                any(fnmatch.fnmatch(f"{'/'.join(parts[i:j+1])}", p) 
+                    for i in range(len(parts))
+                    for j in range(i, len(parts)))
+                for p in patterns.wildcards
             ):
                 continue
                 

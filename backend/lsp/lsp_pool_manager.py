@@ -1,12 +1,13 @@
 import asyncio
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, List, Optional
 from enum import Enum
-import logging
 import time
 from dataclasses import dataclass
 from .lsp_client import LSPClient
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 class ClientStatus(Enum):
     IDLE = "idle"
@@ -200,7 +201,7 @@ class LanguageServerPoolManager:
                         await pooled_client.process.kill()  # Add await here
                         await pooled_client.process.wait()
                     except:
-                        pass
+                        logger.error(f"Error killing process: {str(e)}")
 
             self.servers.pop(language, None)
             self.client_pools.pop(language, None)

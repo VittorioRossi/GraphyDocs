@@ -1,19 +1,21 @@
-import logging
+
 from pathlib import Path
 import uuid
-from typing import AsyncGenerator, Dict, Optional, List
+from typing import Dict, Optional, List
 
 
 from ..interface import GraphMapper
 from analyzers.config_detector import ConfigDetector
 from analyzers.language_detector import LanguageDetector
 from ..symbol_mapper import SymbolMapper
-from graph.models import Node, Edge, EntityKind, RelationType, CodeNode, ConfigFile
+from graph.models import Edge, EntityKind, RelationType, CodeNode, ConfigFile
 from analyzers.file_filter import FileFilter
+from ..interface import AnalysisBatch
 
 from lsp.lsp_client import LSPClient
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+logger = get_logger(__name__)
 
 
 class PackageAnalyzer(GraphMapper):

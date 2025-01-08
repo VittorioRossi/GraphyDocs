@@ -168,6 +168,7 @@ export function FileUpload() {
     }
   };
 
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-6">
       <div className="w-full max-w-[800px] space-y-6">
@@ -280,7 +281,7 @@ export function FileUpload() {
                     <div>
                       <p className="font-medium text-slate-900">{project.name}</p>
                       <p className="text-sm text-slate-500">
-                        Added {new Date(project.created_at).toLocaleDateString()} via {project.source_type}
+                        Added {project.created_at ? new Date(project.created_at).toLocaleDateString() : 'Unknown date'} via {project.source_type}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -302,8 +303,7 @@ export function FileUpload() {
                             Delete
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
+                        <AlertDialogContent className="bg-white dark:bg-gray-800 shadow-lg">                          <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
                               This will permanently delete the project "{project.name}" and all its associated data.
@@ -314,7 +314,7 @@ export function FileUpload() {
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDeleteProject(project.id)}
-                              className="bg-red-600 hover:bg-red-700"
+                              className="bg-red-600 hover:bg-red-700 text-white"
                             >
                               Delete Project
                             </AlertDialogAction>

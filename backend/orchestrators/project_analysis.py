@@ -1,34 +1,33 @@
 # Standard library imports
+import asyncio
+import json
 from collections import defaultdict
+from pathlib import Path
 from typing import Dict, Optional, Union
 from uuid import UUID
-import json
-import asyncio
+
+from algorithms.factory import get_analyzer_by_type
+from algorithms.interface import GraphMapper
 
 # FastAPI imports
-from fastapi import WebSocketDisconnect, WebSocket, Depends, APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from graph.database import get_graph_db
 
-# Redis import
-from redis import Redis
+# Project-specific imports
+from graph.graph_manager import CodeGraphManager
+from models.database import AsyncSession, get_db
+from models.job import Job, JobStatus
+from models.project import Project
+from neo4j import AsyncDriver
 
 # Pydantic import
 from pydantic import BaseModel
 
-# Project-specific imports
-from graph.graph_manager import CodeGraphManager
+# Redis import
+from redis import Redis
+from utils.errors import JobNotFoundError, ProjectNotFoundError
 from utils.job_handler import JobHandler
-from algorithms.interface import GraphMapper
-from algorithms.factory import get_analyzer_by_type
-from utils.errors import ProjectNotFoundError, JobNotFoundError
-from models.database import AsyncSession, get_db
-from models.project import Project
-from models.job import JobStatus, Job
-
-from pathlib import Path
-from graph.database import get_graph_db
-from neo4j import AsyncDriver
 from utils.logging import get_logger
-
 
 logger = get_logger(__name__)
 
@@ -217,7 +216,7 @@ class AnalysisOrchestrator:
         """
         try:
             project_id = UUID(data["project_id"])
-            analyzer_type = data.get("analyzer_type", "package")
+            analyzer_type = data.get("analyzer_type", "package") or "package"
             latest_job = await self.job_handler.get_latest_job(project_id)
 
             # CASE 1: Project has no analysis data
@@ -232,7 +231,7 @@ class AnalysisOrchestrator:
             ):
                 return await self._return_completed_analysis(latest_job.id)
 
-            elif latest_job.status == JobStatus.RUNNING:
+            elif latest_job.status == JobStatus.RUNNING or latest_job.status == JobStatus.PENDING:
                 return await self._handle_continue_analysis(latest_job)
 
             elif latest_job.status == JobStatus.STOPPED:
@@ -486,7 +485,7 @@ class AnalysisOrchestrator:
             await self.job_handler.update_status(job.id, "error", str(e))
             await self._broadcast_error(job.id, str(e))
             # Rollback changes in case of failure
-            await self.graph_manager.remove_project(str(job.project.id))
+            await self.graph_manager.delete_project(str(job.project.id))
         finally:
             if job.id in self.analyzers:
                 await self.analyzers[job.id].stop()
@@ -582,7 +581,7 @@ class AnalysisOrchestrator:
         for ws in self._active_websockets.copy():
             try:
                 await ws.close()
-            except:
+            except:  # noqa
                 logger.error("Error closing websocket connection")
         self._active_websockets.clear()
 

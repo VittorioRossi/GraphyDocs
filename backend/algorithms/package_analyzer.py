@@ -1,13 +1,12 @@
 from typing import AsyncGenerator, Dict, List, Optional, Set
 from pathlib import Path
-import logging
 import uuid
 import asyncio
 
-from analyzers.file_filter import FileFilter, FilterPattern
+from analyzers.file_filter import FileFilter
 from analyzers.language_detector import LanguageDetector
 from analyzers.config_detector import ConfigDetector, ConfigType
-from graph.models import Project, Node, Edge, RelationType, FileNode, Location
+from graph.models import Project, Node, Edge, RelationType, FileNode
 from utils.checkpoint_manager import Position, FailedFileInfo, CheckpointManager
 from utils.processing_queue import ProcessingQueue
 from .interface import BatchUpdate
@@ -140,7 +139,7 @@ class PackageAnalyzer:
                             node = self._create_config_node(current_file, project_node['id'], config_type)
                             if self._add_node_if_new(nodes_batch, node):
                                 edge = Edge(
-                                    source=file_node['id'],
+                                    source=node['id'],
                                     target=project_node["id"],
                                     type=RelationType.CONTAINS
                                 ).model_dump(mode="json")
@@ -250,7 +249,7 @@ class PackageAnalyzer:
                 failed_files=[],
                 status="error",
                 error={"message": str(e)},
-                statistics={"total_files": total_files}
+                statistics={"total_files": 0}
             )
 
     def _cast_nodes(self, nodes: List[Dict]) -> List[Node]:

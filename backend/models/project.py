@@ -1,8 +1,11 @@
-from sqlalchemy import Column, String, DateTime, Enum, func
+import uuid
+
+from sqlalchemy import Column, DateTime, Enum, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-import uuid
+
 from .database import Base
+
 
 class Project(Base):
     __tablename__ = "projects"

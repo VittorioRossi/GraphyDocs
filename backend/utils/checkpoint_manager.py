@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Dict, Set, Optional
-from pathlib import Path
-import logging
 from enum import Enum
 import copy
 import asyncio
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 @dataclass
 class Position:

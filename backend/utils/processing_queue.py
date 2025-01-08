@@ -1,11 +1,12 @@
 from pathlib import Path
 from typing import List, Set, Optional
 import asyncio
-import logging
 from dataclasses import dataclass
 from analyzers.priority_detector import FilePriority, PriorityDetector
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 @dataclass
 class QueueItem:

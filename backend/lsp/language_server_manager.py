@@ -42,7 +42,7 @@ class LanguageServerManager:
             self.clients[language] = client
             return True
             
-        except Exception as e:
+        except Exception:
             await self.stop_server(language)
             return False
 
@@ -73,6 +73,7 @@ class LanguageServerManager:
             "python": ["pylsp"],
             "php": ["php", "-r", "require'vendor/autoload.php';Phpactor\Extension\LanguageServer\LanguageServerExtension::runtime()->run();"],
             "javascript": ["typescript-language-server", "--stdio"],
+            "typescript": ["typescript-language-server", "--stdio"],
             "dockerfile": ["dockerfile-langserver", "--stdio"],
             "c": ["clangd"],
             "cpp": ["clangd"]

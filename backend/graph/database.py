@@ -1,12 +1,12 @@
 from neo4j import AsyncGraphDatabase, AsyncDriver
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
-import logging
 from fastapi import HTTPException
 import os
 import asyncio
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+logger = get_logger(__name__)
 
 class AsyncGraphDatabaseManager:
     _instance: Optional['AsyncGraphDatabaseManager'] = None

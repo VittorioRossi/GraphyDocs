@@ -1,10 +1,10 @@
 import asyncio
 import json
-from typing import Dict, Any, List
 from asyncio import StreamReader, StreamWriter
-import logging
+from typing import Any, Dict, List
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+logger = get_logger(__name__)
 
 class LSPClient:
     def __init__(self, reader: StreamReader, writer: StreamWriter):
@@ -25,7 +25,7 @@ class LSPClient:
                 response = json.loads(content.decode())
                 await self.response_queue.put(response)
             except:
-                break
+                logger.warning("Error while reading LSP response")
 
     async def _read_header(self) -> Dict[str, str]:
         header = {}

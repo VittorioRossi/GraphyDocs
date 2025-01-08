@@ -1,6 +1,5 @@
 from typing import Dict, Optional, Set, AsyncGenerator, List, Any
 from pathlib import Path
-import logging
 import json
 import uuid
 from symbol_mapper import SymbolMapper
@@ -10,12 +9,9 @@ from lsp.language_server_manager import LanguageServerManager
 from lsp.lsp_symbols import SymbolKind
 from backend.analyzers.language_detector import LanguageDetector
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConfigDetector:

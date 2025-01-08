@@ -1,7 +1,5 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, Mock, patch
-from pathlib import Path
+from unittest.mock import AsyncMock, patch
 from lsp.language_server_manager import LanguageServerManager
 
 @pytest.fixture

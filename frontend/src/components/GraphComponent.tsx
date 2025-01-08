@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 import { useParams, useNavigate } from 'react-router-dom';
 
@@ -329,6 +330,14 @@ const GraphComponent: React.FC = () => {
 
   return (
     <div className="relative h-screen w-full">
+      <Button
+        variant="outline"
+        className="absolute top-4 left-4 z-50"
+        onClick={() => navigate(-1)}
+      >
+        Back
+      </Button>
+
       <AnalysisPanel 
         status={analysisStatus} 
         stats={graphStats} 
