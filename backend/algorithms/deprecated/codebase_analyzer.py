@@ -3,7 +3,7 @@ from pathlib import Path
 import logging
 import json
 import uuid
-from .symbol_mapper import SymbolMapper
+from symbol_mapper import SymbolMapper
 from graph.models import RelationType, CodeNode, Project, Location, EntityKind
 from graph.graph_manager import CodeGraphManager
 from lsp.language_server_manager import LanguageServerManager

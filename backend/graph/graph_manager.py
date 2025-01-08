@@ -197,15 +197,6 @@ class CodeGraphManager:
                 "rel_type": rel_type.value
             })
 
-    async def delete_project(self, name: str):
-        query = """
-        MATCH (p:Project {name: $project_name})
-        OPTIONAL MATCH (p)<-[:PART_OF]-(e)
-        DETACH DELETE e, p
-        """
-        async with self.driver.session() as session:
-            await session.run(query, project_name=name)
-
     async def get_project_entities(self, project_name: str) -> List[Dict]:
         query = """
         MATCH (p:Project {name: $project_name})<-[:PART_OF]-(n)
@@ -291,79 +282,89 @@ class CodeGraphManager:
         results = await self.db.execute_query(query)
         return results
 
-    async def remove_project(self, project_id: str):
-        """
-        Remove all nodes and edges related to a project from the graph.
-
-        Args:
-            project_id (str): The ID of the project to remove.
-        await tx.run("MATCH (n {project_id: $project_id}) DETACH DELETE n", project_id=project_id)
+    async def delete_project(self, project_id: str):
+        # Delete all nodes with project_id and all the relationship and all depths
+        query = """
+        MATCH (p:Project {id: $project_id})<-[*]-(n)
+        DETACH DELETE n
         """
         async with self.driver.session() as session:
-            await session.write_transaction(self._remove_project_nodes, project_id)
-            await session.write_transaction(self._remove_project_edges, project_id)
+            await session.run(query, project_id=project_id)
+        
 
-    @staticmethod
-    async def _remove_project_nodes(tx, project_id: str):
-        await tx.run("MATCH (n {project_id: $project_id}) DETACH DELETE n", project_id=project_id)
-
-    @staticmethod
-    async def _remove_project_edges(tx, project_id: str):
-        await tx.run("MATCH ()-[r {project_id: $project_id}]->() DELETE r", project_id=project_id)
-
-    async def get_project_graph(self, project_id: str) -> Dict:
+    async def get_project_graph(self, job_id: str) -> Dict:
         """
-        Get the complete graph data for a project.
+        Get the complete graph data for nodes with specific job_id.
         
         Args:
-            project_id (str): The ID of the project
+            job_id (str): The ID of the analysis job
             
         Returns:
             Dict containing nodes and edges for the project
         """
         async with self.driver.session() as session:
-            # Get all nodes for the project
+            # Get all nodes for the job_id
             nodes_result = await session.run("""
-                MATCH (n)
-                WHERE n.project_id = $project_id
+                MATCH (n:CodeNode)
+                WHERE n.job_id = $job_id
                 RETURN COLLECT(properties(n)) as nodes
-            """, {"project_id": project_id})
+            """, {"job_id": job_id})
             
             nodes_record = await nodes_result.single()
             nodes = nodes_record["nodes"] if nodes_record else []
             
-            # Get all relationships between these nodes
-            edges_result = await session.run("""
-                MATCH (source)-[r]->(target)
-                WHERE source.project_id = $project_id 
-                AND target.project_id = $project_id
-                RETURN COLLECT({
-                    source: source.id,
-                    target: target.id,
-                    type: type(r),
-                    properties: properties(r)
-                }) as edges
-            """, {"project_id": project_id})
-            
-            edges_record = await edges_result.single()
-            raw_edges = edges_record["edges"] if edges_record else []
-            
-            # Convert edges to proper format
-            edges = []
-            for edge in raw_edges:
-                edge_data = {
-                    "source": edge["source"],
-                    "target": edge["target"],
-                    "type": edge["type"]
-                }
-                if edge.get("properties"):
-                    edge_data.update(edge["properties"])
-                edges.append(edge_data)
-            
-            # Add debug logging
-            logger.debug(f"Retrieved {len(nodes)} nodes and {len(edges)} edges for project {project_id}")
-            
+            # Get relationships between these nodes using their IDs
+            if nodes:
+                node_ids = [node['id'] for node in nodes]
+                edges_result = await session.run("""
+                    MATCH (source:CodeNode)-[r]->(target:CodeNode)
+                    WHERE source.id IN $node_ids AND target.id IN $node_ids
+                    RETURN COLLECT({
+                        source: source.id,
+                        target: target.id,
+                        type: type(r),
+                        properties: properties(r)
+                    }) as edges
+                """, {"node_ids": node_ids})
+                
+                edges_record = await edges_result.single()
+                raw_edges = edges_record["edges"] if edges_record else []
+                
+                # Convert edges to proper format
+                edges = []
+                for edge in raw_edges:
+                    edge_data = {
+                        "source": edge["source"],
+                        "target": edge["target"],
+                        "type": edge["type"]
+                    }
+                    if edge.get("properties"):
+                        edge_data.update(edge["properties"])
+                    edges.append(edge_data)
+            else:
+                edges = []
+                
+            logger.debug(f"Retrieved {len(nodes)} nodes and {len(edges)} edges for job {job_id}")
             return {
                 "nodes": nodes,
                 "edges": edges
             }
+
+    async def close(self):
+        """Close the Neo4j driver connection."""
+        if self.driver:
+            await self.driver.close()
+            self.driver = None
+
+    def __del__(self):
+        """Ensure driver is closed on garbage collection."""
+        if self.driver:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.close())
+                else:
+                    loop.run_until_complete(self.close())
+            except Exception as e:
+                logger.error(f"Error closing Neo4j driver: {str(e)}")

@@ -4,6 +4,7 @@ from typing import AsyncGenerator, Optional
 import logging
 from fastapi import HTTPException
 import os
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +99,19 @@ class AsyncGraphDatabaseManager:
 # Singleton instance
 graph_db = AsyncGraphDatabaseManager()
 
-async def initialize_graph_db():
-    """Initialize the database connection on startup."""
-    await graph_db.connect()
+async def initialize_graph_db(max_retries: int = 3, retry_delay: float = 5.0):
+    """Initialize the database connection on startup with retry logic."""
+    
+    for attempt in range(max_retries):
+        try:
+            await graph_db.connect()
+            return
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.error(f"Failed to connect after {max_retries} attempts: {str(e)}")
+                raise
+            logger.warning(f"Connection attempt {attempt + 1} failed, retrying in {retry_delay} seconds...")
+            await asyncio.sleep(retry_delay)
 
 async def shutdown_graph_db():
     """Close the database connection on shutdown."""

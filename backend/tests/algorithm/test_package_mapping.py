@@ -41,18 +41,6 @@ def mock_lsp_client():
     return client
 
 @pytest.mark.asyncio
-async def test_init_analysis(package_analyzer, tmp_path):
-    # Create a test file
-    test_file = tmp_path / "test.py"
-    test_file.write_text("class TestClass: pass")
-    
-    try:
-        with patch('algorithms.package_analyzer.LanguageServerPoolManager.start_server', return_value=True):
-            await package_analyzer.init_analysis(str(tmp_path))
-    finally:
-        await package_analyzer.stop()
-
-@pytest.mark.asyncio
 async def test_analyze_empty_directory(package_analyzer, tmp_path):
     with patch('algorithms.package_analyzer.LanguageDetector.detect', return_value=Mock(value='python')):
         updates = []

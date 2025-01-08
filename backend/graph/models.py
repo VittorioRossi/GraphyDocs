@@ -47,6 +47,7 @@ class Node(BaseModel):
     name: str
     kind: str
     project_id: str
+    job_id: str = None
 
 class Edge(BaseModel):
     """

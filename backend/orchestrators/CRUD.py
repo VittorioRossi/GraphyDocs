@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from graph.database import get_graph_db
 from graph.graph_manager import CodeGraphManager
 from models.database import get_db
+from models.job import JobStatus  # Add this import
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +39,6 @@ async def list_sessions(db: AsyncSession = Depends(get_db)) -> List[Dict]:
         SELECT j.id, j.status, j.progress, j.created_at, p.name as project_name
         FROM jobs j
         JOIN projects p ON j.project_id = p.id
-        WHERE j.status IN ('running', 'pending')
         ORDER BY j.created_at DESC
         """)
     )
@@ -125,19 +125,28 @@ async def get_statistics(
 ) -> Dict:
     """Get system-wide statistics"""
     try:
-        # Get PostgreSQL stats
+
         stats_query = await db.execute(
             text("""
             SELECT 
                 (SELECT COUNT(*) FROM projects) as total_projects,
                 (SELECT COUNT(*) FROM jobs) as total_jobs,
-                (SELECT COUNT(*) FROM jobs WHERE status = 'running') as active_jobs,
-                (SELECT COUNT(*) FROM jobs WHERE status = 'completed') as completed_jobs,
-                (SELECT COUNT(*) FROM jobs WHERE status = 'error') as failed_jobs
-            """)
+                (SELECT COUNT(*) FROM jobs WHERE status = :pending_status) as pending_jobs,
+                (SELECT COUNT(*) FROM jobs WHERE status = :stopped_status) as stopped_jobs,
+                (SELECT COUNT(*) FROM jobs WHERE status = :running_status) as running_jobs,
+                (SELECT COUNT(*) FROM jobs WHERE status = :completed_status) as completed_jobs,
+                (SELECT COUNT(*) FROM jobs WHERE status = :error_status) as failed_jobs
+            """),
+            {
+                "pending_status": JobStatus.PENDING.value,
+                "stopped_status": JobStatus.STOPPED.value,
+                "running_status": JobStatus.RUNNING.value,
+                "completed_status": JobStatus.COMPLETED.value,
+                "error_status": JobStatus.ERROR.value
+            }
         )
         stats = stats_query.mappings().first()
-        
+            
         # Handle Neo4j stats with better error checking
         async with neo4j.session() as session:
             result = await session.run("""
@@ -215,7 +224,7 @@ async def delete_project(
         graph_manager = CodeGraphManager(neo4j)
         
         try:
-            await graph_manager.remove_project(str(project_id))
+            await graph_manager.delete_project(str(project_id))
         finally:
             await graph_manager.close()
         

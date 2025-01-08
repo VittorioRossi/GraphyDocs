@@ -1,9 +1,7 @@
 from sqlalchemy import Column, String, DateTime, Enum, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import sessionmaker, relationship
-from datetime import datetime
+from sqlalchemy.orm import relationship
 import uuid
-import os
 from .database import Base
 
 class Project(Base):

@@ -22,7 +22,7 @@ class GraphMapper(ABC):
       self.lsp_manager = LanguageServerManager()
 
    @abstractmethod
-   async def analyze(self, file_path: str, project_id:str) -> AsyncGenerator[BatchUpdate, None]:
+   async def analyze(self, file_path: str, checkpoint:dict) -> AsyncGenerator[BatchUpdate, None]:
       """
       Analyzes a file and yields graph elements (nodes and edges) in batches asynchronously.
 

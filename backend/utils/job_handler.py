@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,101 +7,42 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload, joinedload
 import logging
 
-from models.job import Job
+from models.job import Job, JobStatus
 from models.project import Project
 from utils.errors import ProjectNotFoundError
+
 
 class JobHandler:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.logger = logging.getLogger(__name__)
 
-    async def create_job(self, project_id: UUID) -> Job:
+    def _to_uuid(self, id: Union[str, UUID]) -> UUID:
+        """Convert string to UUID if needed"""
+        if isinstance(id, str):
+            return UUID(id)
+        return id
+
+    async def create_job(self, project_id: Union[str, UUID]) -> Job:
         job = Job(
-            project_id=project_id,
-            status='running',
+            project_id=self._to_uuid(project_id),
+            status=JobStatus.PENDING,
             progress=0,
             message='Starting analysis...',
             sequence=0,
-            active_connections=0
         )
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
         return job
 
-    async def get_job(self, job_id: UUID) -> Optional[Job]:
-        return await self.db.get(Job, job_id)
+    async def get_job(self, job_id: Union[str, UUID]) -> Optional[Job]:
+        return await self.db.get(Job, self._to_uuid(job_id))
 
-    async def update_status(self, job_id: UUID, status: str, error_msg: str = None):
-        job = await self.get_job(job_id)
-        if job:
-            job.status = status
-            job.error = error_msg
-            job.updated_at = datetime.now()
-            if status == 'completed':
-                job.progress = 100
-            elif status == 'error':
-                job.message = error_msg
-            await self.db.commit()
-
-    async def update_progress(self, job_id: UUID, progress: int, message: str = None):
-        job = await self.get_job(job_id)
-        if job:
-            job.progress = progress
-            if message:
-                job.message = message
-            job.updated_at = datetime.now()
-            await self.db.commit()
-
-    async def increment_sequence(self, job_id: UUID) -> int:
-        job = await self.get_job(job_id)
-        if job:
-            job.sequence += 1
-            await self.db.commit()
-            return job.sequence
-        return 0
-
-    async def update_checkpoint(self, job_id: UUID, checkpoint: dict):
-        job = await self.get_job(job_id)
-        if job:
-            job.last_checkpoint = checkpoint
-            job.updated_at = datetime.now()
-            await self.db.commit()
-
-    async def update_connections(self, job_id: UUID, increment: bool = True):
-        job = await self.get_job(job_id)
-        if job:
-            job.active_connections += 1 if increment else -1
-            job.updated_at = datetime.now()
-            await self.db.commit()
-
-    async def get_project_jobs(self, project_id: UUID) -> List[Job]:
-        result = await self.db.execute(
-            select(Job).filter(Job.project_id == project_id)
-        )
-        return result.scalars().all()
-
-    async def cleanup_stale_jobs(self, max_age_hours: int = 24):
-        cutoff = datetime.now() - timedelta(hours=max_age_hours)
-        result = await self.db.execute(
-            select(Job).filter(
-                Job.status == 'running',
-                Job.updated_at < cutoff
-            )
-        )
-        stale_jobs = result.scalars().all()
-        
-        for job in stale_jobs:
-            await self.update_status(
-                job.id, 
-                'error', 
-                f'Job timed out after {max_age_hours} hours'
-            )
-
-    async def get_job_with_project(self, job_id: UUID) -> Optional[Job]:
+    async def get_job_with_project(self, job_id: Union[str, UUID]) -> Optional[Job]:
         """Get a job with its associated project loaded"""
         self.logger.debug(f"Getting job {job_id} with project details")
+        job_id = self._to_uuid(job_id)
         try:
             stmt = (
                 select(Job)
@@ -125,8 +66,8 @@ class JobHandler:
             self.logger.error(f"Error getting job with project: {str(e)}")
             raise
 
-    async def get_latest_job(self, project_id: UUID):
-        """Get the latest completed job for a project"""
+    async def get_latest_job(self, project_id: Union[str, UUID]):
+        project_id = self._to_uuid(project_id)
         result = await self.db.execute(
             select(Job)
             .where(Job.project_id == project_id)
@@ -135,7 +76,8 @@ class JobHandler:
         )
         return result.scalars().first()
 
-    async def get_project(self, project_id: UUID) -> Project:
+    async def get_project(self, project_id: Union[str, UUID]) -> Project:
+        project_id = self._to_uuid(project_id)
         result = await self.db.execute(
             select(Project).where(Project.id == project_id)
         )
@@ -143,3 +85,64 @@ class JobHandler:
         if not project:
             raise ProjectNotFoundError(f"Project with id {project_id} not found")
         return project
+
+    async def update_status(self, job_id: Union[str, UUID], status: JobStatus, error_msg: str = None):
+        job = await self.get_job(self._to_uuid(job_id))
+        if job:
+            job.status = status.value
+            job.error = error_msg
+            job.updated_at = datetime.now()
+            if status == JobStatus.COMPLETED:
+                job.progress = 100
+            elif status == JobStatus.ERROR:
+                job.message = error_msg
+            await self.db.commit()
+
+    async def update_progress(self, job_id: Union[str, UUID], progress: int, message: str = None):
+        job = await self.get_job(self._to_uuid(job_id))
+        if job:
+            job.progress = progress
+            if message:
+                job.message = message
+            job.updated_at = datetime.now()
+            await self.db.commit()
+
+    async def increment_sequence(self, job_id: Union[str, UUID]) -> int:
+        job = await self.get_job(self._to_uuid(job_id))
+        if job:
+            job.sequence += 1
+            await self.db.commit()
+            return job.sequence
+        return 0
+
+    async def update_checkpoint(self, job_id: Union[str, UUID], checkpoint: dict):
+        job = await self.get_job(self._to_uuid(job_id))
+        if job:
+            job.last_checkpoint = checkpoint
+            job.updated_at = datetime.now()
+            await self.db.commit()
+
+    async def get_project_jobs(self, project_id: Union[str, UUID]) -> List[Job]:
+        project_id = self._to_uuid(project_id)
+        result = await self.db.execute(
+            select(Job).filter(Job.project_id == project_id)
+        )
+        return result.scalars().all()
+
+    async def cleanup_stale_jobs(self, max_age_hours: int = 24):
+        cutoff = datetime.now() - timedelta(hours=max_age_hours)
+        result = await self.db.execute(
+            select(Job).filter(
+                Job.status == 'running',
+                Job.updated_at < cutoff
+            )
+        )
+        stale_jobs = result.scalars().all()
+        
+        for job in stale_jobs:
+            await self.update_status(
+                job.id, 
+                'error', 
+                f'Job timed out after {max_age_hours} hours'
+            )
+

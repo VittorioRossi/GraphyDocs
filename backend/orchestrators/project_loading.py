@@ -11,7 +11,6 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from models.database import Project
 from models.database import get_db
 
 

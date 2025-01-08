@@ -6,6 +6,7 @@ import os
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
+logger.disabled = True
 
 class Base(DeclarativeBase):
     pass
@@ -33,7 +34,7 @@ def get_session_maker(db_url: str = db_url):
         autoflush=False
     )
 
-async def init_db(db_url: str):
+async def init_db(db_url: str = db_url):
     """Initialize database tables"""
     logger.info("Creating database tables...")
     engine = create_async_engine(db_url)

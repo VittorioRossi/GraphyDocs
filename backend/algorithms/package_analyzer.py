@@ -14,9 +14,9 @@ from .interface import BatchUpdate
 from .symbol_mapper import SymbolMapper
 from lsp.language_server_manager import LanguageServerManager
 
-logger = logging.getLogger(__name__)
+from utils.logging import get_logger
 
-logger.disabled = True
+logger = get_logger(__name__)
 
 class PackageAnalyzer:
     def __init__(self):
@@ -28,15 +28,12 @@ class PackageAnalyzer:
         self.processed_nodes: Set[str] = set()
         self.processed_edges: Set[str] = set()
         self._cleanup_done = False
-        
-    async def init_analysis(self, root_directory: str) -> None:
-        logger.info(f"Analysis initialized for {root_directory}")
-        
+                
     def _create_project_node(self, root_path: Path) -> Dict:
         id = str(uuid.uuid4())
         project = Project(
             id=id,
-            project_id=id, 
+            project_id=id,
             uri=f"project://{root_path.name}",
             name="Project",
             version="0.0.1",
@@ -89,14 +86,26 @@ class PackageAnalyzer:
             return True
         return False
 
+    def add_metadata(self, nodes, metadata: Dict):
+        if not metadata or not nodes:
+            return
+            
+        for node in nodes:
+            for voice, value in metadata.items():
+                if voice in node:
+                    node[voice] = value
+
+        return nodes
+
     async def analyze(
         self,
         root_directory: str, 
-        checkpoint: Optional[Dict] = None
+        checkpoint: Optional[Dict] = None,
+        metadata: Optional[Dict] = None
     ) -> AsyncGenerator[BatchUpdate, None]:
         try:
             root_path = Path(root_directory)
-            await self.init_analysis(root_directory)
+
             all_files = [f for f in root_path.rglob("*") if f.is_file()]
             
             project_node = self._create_project_node(root_path)
@@ -104,17 +113,9 @@ class PackageAnalyzer:
             if checkpoint:
                 await self.checkpoint_manager.load_state(checkpoint)
 
-            # Create default filter pattern with built-in ignores
-            filter_pattern = FilterPattern(paths=set(), wildcards=FileFilter.DEFAULT_IGNORES)
             
-            # Check for custom .gitignore
-            gitignore_path = root_path / '.gitignore'
-            if gitignore_path.exists():
-                custom_patterns = FileFilter.from_file(gitignore_path)
-                filter_pattern.paths.update(custom_patterns.paths)
-                filter_pattern.wildcards.update(custom_patterns.wildcards)
-            
-            filtered_files = FileFilter.filter_files(all_files, filter_pattern)
+            filtered_files = FileFilter.filter_files(all_files)
+            total_files = len(filtered_files)
             await self.processing_queue.add_files(filtered_files, root_path)
 
             async with LanguageServerManager() as lsp_manager:
@@ -216,6 +217,8 @@ class PackageAnalyzer:
 
                         await self.processing_queue.mark_completed(str(current_file))
 
+                        nodes_batch = self.add_metadata(nodes_batch, metadata)
+
                     except Exception as e:
                         logger.error(f"Error processing {current_file}: {str(e)}")
                         failed_files.append(FailedFileInfo(
@@ -231,7 +234,8 @@ class PackageAnalyzer:
                         edges=self._cast_edges(edges_batch),
                         processed_files=processed_files,
                         failed_files=failed_files,
-                        status="structure_complete"
+                        status="structure_complete",
+                        statistics={"total_files": total_files}
                     )
 
             cleanup_update = await self.cleanup()
@@ -245,7 +249,8 @@ class PackageAnalyzer:
                 processed_files=[],
                 failed_files=[],
                 status="error",
-                error={"message": str(e)}
+                error={"message": str(e)},
+                statistics={"total_files": total_files}
             )
 
     def _cast_nodes(self, nodes: List[Dict]) -> List[Node]:
@@ -261,7 +266,8 @@ class PackageAnalyzer:
                 edges=[],
                 processed_files=[],
                 failed_files=[],
-                status="complete"
+                status="complete",
+                statistics={"total_files": 0}
             )
             
         try:
