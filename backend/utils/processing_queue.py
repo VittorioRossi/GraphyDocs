@@ -8,16 +8,19 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 @dataclass
 class QueueItem:
     path: Path
     priority: FilePriority
     size: int = 0
 
+
 class ProcessingQueue:
     """
     Safe queue implementation for file processing with priority handling.
     """
+
     def __init__(self, max_queue_size: int = 10000):
         self.max_queue_size = max_queue_size
         self.queue: List[QueueItem] = []
@@ -25,11 +28,8 @@ class ProcessingQueue:
         self.failed: Set[str] = set()
         self._lock = asyncio.Lock()
         self._current_item: Optional[str] = None
-        self.stats = {
-            'total_processed': 0,
-            'total_failed': 0
-        }
-        
+        self.stats = {"total_processed": 0, "total_failed": 0}
+
     async def add_files(self, files: List[Path], root_path: Path) -> None:
         """Add new files to the queue with priority calculation."""
         async with self._lock:
@@ -45,14 +45,14 @@ class ProcessingQueue:
                     try:
                         priority = self._calculate_priority(file_path, root_path)
                         size = file_path.stat().st_size
-                        self.queue.append(QueueItem(
-                            path=file_path,
-                            priority=priority,
-                            size=size
-                        ))
+                        self.queue.append(
+                            QueueItem(path=file_path, priority=priority, size=size)
+                        )
                     except Exception as e:
-                        logger.error(f"Error adding file to queue {file_path}: {str(e)}")
-            
+                        logger.error(
+                            f"Error adding file to queue {file_path}: {str(e)}"
+                        )
+
             self._sort_queue()
 
     async def get_next(self) -> Optional[Path]:
@@ -70,14 +70,14 @@ class ProcessingQueue:
         async with self._lock:
             self.processed.add(file_path)
             self._current_item = None
-            self.stats['total_processed'] += 1
+            self.stats["total_processed"] += 1
 
     async def mark_failed(self, file_path: str) -> None:
         """Mark file as failed."""
         async with self._lock:
             self.failed.add(file_path)
             self._current_item = None
-            self.stats['total_failed'] += 1
+            self.stats["total_failed"] += 1
 
     async def has_more(self) -> bool:
         """Check if there are more files to process."""
@@ -88,11 +88,11 @@ class ProcessingQueue:
         """Get current queue status."""
         async with self._lock:
             return {
-                'queued': len(self.queue),
-                'processed': len(self.processed),
-                'failed': len(self.failed),
-                'active': 1 if self._current_item else 0,
-                **self.stats
+                "queued": len(self.queue),
+                "processed": len(self.processed),
+                "failed": len(self.failed),
+                "active": 1 if self._current_item else 0,
+                **self.stats,
             }
 
     async def cleanup(self) -> None:
@@ -102,10 +102,7 @@ class ProcessingQueue:
             self.processed.clear()
             self.failed.clear()
             self._current_item = None
-            self.stats = {
-                'total_processed': 0,
-                'total_failed': 0
-            }
+            self.stats = {"total_processed": 0, "total_failed": 0}
 
     def _calculate_priority(self, file_path: Path, root_path: Path) -> FilePriority:
         """
@@ -121,7 +118,9 @@ class ProcessingQueue:
         """
         Sort queue by priority and size.
         """
-        self.queue.sort(key=lambda x: (
-            x.priority.value,      # Priority first
-            x.size                 # Smaller files first
-        ))
+        self.queue.sort(
+            key=lambda x: (
+                x.priority.value,  # Priority first
+                x.size,  # Smaller files first
+            )
+        )

@@ -9,10 +9,12 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class ClientStatus(Enum):
     IDLE = "idle"
     BUSY = "busy"
     ERROR = "error"
+
 
 @dataclass
 class PooledClient:
@@ -24,15 +26,16 @@ class PooledClient:
     async def stop(self):
         """Stop the client and its associated server process."""
         try:
-            if hasattr(self.client, 'shutdown'):
+            if hasattr(self.client, "shutdown"):
                 await self.client.shutdown()
-            if hasattr(self.client, 'exit'):
+            if hasattr(self.client, "exit"):
                 await self.client.exit()
             if self.process and self.process.returncode is None:
                 self.process.terminate()
                 await self.process.wait()
         except Exception as e:
             logger.error(f"Error stopping client: {str(e)}")
+
 
 class LanguageServerPoolManager:
     def __init__(self, max_clients_per_language: int = 3, client_timeout: int = 300):
@@ -47,7 +50,9 @@ class LanguageServerPoolManager:
         self._disposed = False
         self._stopping = False
         self._lock = asyncio.Lock()
-        logger.info(f"LSP pool manager initialized with {max_clients_per_language} max clients per language")
+        logger.info(
+            f"LSP pool manager initialized with {max_clients_per_language} max clients per language"
+        )
 
     async def __aenter__(self):
         return self
@@ -76,7 +81,7 @@ class LanguageServerPoolManager:
                 *server_command,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
 
             if not process.stdin or not process.stdout:
@@ -84,27 +89,22 @@ class LanguageServerPoolManager:
 
             # Create transport pairs
             loop = asyncio.get_running_loop()
-            
+
             # Create reader transport
             reader = asyncio.StreamReader()
             reader_protocol = asyncio.StreamReaderProtocol(reader)
             reader_transport, _ = await loop.connect_read_pipe(
-                lambda: reader_protocol,
-                process.stdout
+                lambda: reader_protocol, process.stdout
             )
 
             # Create writer transport
             writer_transport, writer_protocol = await loop.connect_write_pipe(
-                asyncio.BaseProtocol,
-                process.stdin
+                asyncio.BaseProtocol, process.stdin
             )
-            
+
             # Create StreamWriter
             writer = asyncio.StreamWriter(
-                writer_transport,
-                writer_protocol,
-                reader,
-                loop
+                writer_transport, writer_protocol, reader, loop
             )
 
             # Initialize client
@@ -124,18 +124,18 @@ class LanguageServerPoolManager:
                 client=client,
                 status=ClientStatus.IDLE,
                 last_used=time.time(),
-                process=process
+                process=process,
             )
-            
+
             self.servers[language].append(process)
             self.client_pools[language].append(pooled_client)
-            
+
             if not self._cleanup_task:
                 self._cleanup_task = asyncio.create_task(self._cleanup_loop())
-            
+
             logger.info(f"Started new {language} server instance")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to start {language} server: {str(e)}")
             return False
@@ -149,8 +149,12 @@ class LanguageServerPoolManager:
 
         # Try to get an idle client
         idle_client = next(
-            (pc for pc in self.client_pools[language] if pc.status == ClientStatus.IDLE),
-            None
+            (
+                pc
+                for pc in self.client_pools[language]
+                if pc.status == ClientStatus.IDLE
+            ),
+            None,
         )
 
         if idle_client:
@@ -186,11 +190,15 @@ class LanguageServerPoolManager:
         try:
             for pooled_client in self.client_pools[language]:
                 try:
-                    if pooled_client.process.returncode is None:  # Only if process is still running
+                    if (
+                        pooled_client.process.returncode is None
+                    ):  # Only if process is still running
                         await pooled_client.client.shutdown()
                         await pooled_client.process.terminate()  # Add await here
                         try:
-                            await asyncio.wait_for(pooled_client.process.wait(), timeout=2.0)
+                            await asyncio.wait_for(
+                                pooled_client.process.wait(), timeout=2.0
+                            )
                         except asyncio.TimeoutError:
                             await pooled_client.process.kill()  # Add await here
                             await pooled_client.process.wait()
@@ -207,7 +215,7 @@ class LanguageServerPoolManager:
             self.client_pools.pop(language, None)
             self.connection_queues.pop(language, None)
             logger.info(f"Stopped all {language} servers")
-            
+
         except Exception as e:
             logger.error(f"Error stopping {language} servers: {str(e)}")
 
@@ -219,7 +227,7 @@ class LanguageServerPoolManager:
                 for client in clients:
                     if client:
                         tasks.append(self._stop_client(client))
-            
+
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
             self.client_pools.clear()
@@ -250,9 +258,11 @@ class LanguageServerPoolManager:
         for language in list(self.client_pools.keys()):
             active_clients = []
             for pooled_client in self.client_pools[language]:
-                if (current_time - pooled_client.last_used > self.client_timeout and 
-                    pooled_client.status == ClientStatus.IDLE and 
-                    len(self.client_pools[language]) > 1):
+                if (
+                    current_time - pooled_client.last_used > self.client_timeout
+                    and pooled_client.status == ClientStatus.IDLE
+                    and len(self.client_pools[language]) > 1
+                ):
                     try:
                         await pooled_client.client.shutdown()
                         await pooled_client.process.terminate()  # Add await here
@@ -269,7 +279,7 @@ class LanguageServerPoolManager:
         """Dispose of the pool manager and cleanup all resources."""
         if self._disposed:
             return
-            
+
         self._disposed = True
         try:
             self._stopping = True
@@ -290,14 +300,14 @@ class LanguageServerPoolManager:
                         logger.error(f"Error stopping client for {language}: {e}")
 
             self.client_pools.clear()
-            
+
         except Exception as e:
             logger.error(f"Error during LSP pool disposal: {e}")
         finally:
             self._stopping = False
-        
+
         await self.stop_all_servers()
-        
+
         # Force kill any remaining processes
         for language, processes in self.servers.items():
             for process in processes:
@@ -307,7 +317,7 @@ class LanguageServerPoolManager:
                         await process.wait()
                 except Exception as e:
                     logger.error(f"Error killing process: {str(e)}")
-                    
+
         self.servers.clear()
         self.client_pools.clear()
         self.connection_queues.clear()
@@ -323,15 +333,18 @@ class LanguageServerPoolManager:
             # Ignore any errors during cleanup
             pass
 
-
     def _get_server_command(self, language: str) -> Optional[List[str]]:
         """Get the command to start a language server."""
         commands = {
             "python": ["pylsp"],
-            "php": ["php", "-r", "require'vendor/autoload.php';Phpactor\\Extension\\LanguageServer\\LanguageServerExtension::runtime()->run();"],
+            "php": [
+                "php",
+                "-r",
+                "require'vendor/autoload.php';Phpactor\\Extension\\LanguageServer\\LanguageServerExtension::runtime()->run();",
+            ],
             "javascript": ["typescript-language-server", "--stdio"],
             "dockerfile": ["dockerfile-langserver", "--stdio"],
             "c": ["clangd"],
-            "cpp": ["clangd"]
+            "cpp": ["clangd"],
         }
         return commands.get(language)

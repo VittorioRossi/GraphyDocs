@@ -20,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-logger.disabled = True
+# logger.disabled = True
 
 
 class GitProjectRequest(BaseModel):
@@ -222,6 +222,7 @@ orchestrator = ProjectLoadingOrchestrator()
 async def clone_github_repository(
     request: GitProjectRequest, db: AsyncSession = Depends(get_db)
 ):
+    logger.info(f"Received request to clone repository: {request.token}")
     return await orchestrator.clone_github_repository(request, db)
 
 

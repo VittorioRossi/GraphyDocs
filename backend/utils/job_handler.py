@@ -11,6 +11,7 @@ from utils.errors import ProjectNotFoundError
 
 from utils.logging import get_logger
 
+
 class JobHandler:
     def __init__(self, db: AsyncSession):
         self.db = db

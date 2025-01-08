@@ -231,7 +231,10 @@ class AnalysisOrchestrator:
             ):
                 return await self._return_completed_analysis(latest_job.id)
 
-            elif latest_job.status == JobStatus.RUNNING or latest_job.status == JobStatus.PENDING:
+            elif (
+                latest_job.status == JobStatus.RUNNING
+                or latest_job.status == JobStatus.PENDING
+            ):
                 return await self._handle_continue_analysis(latest_job)
 
             elif latest_job.status == JobStatus.STOPPED:

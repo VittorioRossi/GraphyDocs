@@ -2,9 +2,10 @@ from enum import Enum
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 
+
 class EntityKind(Enum):
     MODULE = "Module"
-    CLASS = "Class" 
+    CLASS = "Class"
     FUNCTION = "Function"
     VARIABLE = "Variable"
     NAMESPACE = "Namespace"
@@ -33,6 +34,7 @@ class RelationType(Enum):
     HAS_PARAMETER = "HAS_PARAMETER"
     THROWS = "THROWS"
 
+
 class Node(BaseModel):
     """
     Node class represents a node in a graph.
@@ -42,12 +44,14 @@ class Node(BaseModel):
         uri (str): Unique identifier for the node.
         name (str): Descriptive name for the node.
     """
+
     id: str  # Add id attribute
     uri: str
     name: str
     kind: str
     project_id: str
     job_id: str = None
+
 
 class Edge(BaseModel):
     """
@@ -58,9 +62,11 @@ class Edge(BaseModel):
         target (str): The target node of the edge.
         type (RelationType): The type of relationship between the nodes.
     """
+
     source: str
     target: str
     type: RelationType
+
 
 class Location(BaseModel):
     """
@@ -71,9 +77,11 @@ class Location(BaseModel):
         start_line (int): The starting line number of the location.
         end_line (int): The ending line number of the location.
     """
+
     file: str
     start_line: int
     end_line: int
+
 
 class CodeNode(Node):
     """
@@ -85,6 +93,7 @@ class CodeNode(Node):
         kind (EntityKind): The kind of code entity.
         location (Location): The location of the code entity.
     """
+
     kind: EntityKind
     location: Location
     fully_qualified_name: str
@@ -93,12 +102,15 @@ class CodeNode(Node):
         data = super().model_dump(*args, **kwargs)
         if "location" in data:
             loc = data.pop("location")
-            data.update({
-                "location_file": loc["file"],
-                "location_start_line": loc["start_line"],
-                "location_end_line": loc["end_line"]
-            })
+            data.update(
+                {
+                    "location_file": loc["file"],
+                    "location_start_line": loc["start_line"],
+                    "location_end_line": loc["end_line"],
+                }
+            )
         return data
+
 
 class FileNode(Node):
     """
@@ -109,6 +121,7 @@ class FileNode(Node):
         name (str): File name with extension.
         path (str): File path on the filesystem.
     """
+
     path: str
     name: str
 
@@ -120,36 +133,46 @@ class ConfigFile(FileNode):
     Attributes:
         config_type (Optional[str]): The type of configuration file.
     """
+
     kind: str = "ConfigFile"
     config_type: Optional[str]
+
 
 class Project(Node):
     kind: str = "Project"
     name: str
     version: str
 
+
 class Module(CodeNode):
     pass
+
 
 class Namespace(CodeNode):
     pass
 
+
 class Class(CodeNode):
     is_abstract: bool
+
 
 class Function(CodeNode):
     return_type: str
     is_static: bool
 
+
 class Variable(CodeNode):
     type: str
     is_constant: bool
 
+
 class Enum(CodeNode):
     values: List[str]
 
+
 class Annotation(CodeNode):
     arguments: Dict[str, str]
+
 
 class Parameter(CodeNode):
     type: str
@@ -161,11 +184,8 @@ if __name__ == "__main__":
         uri="file://path/to/file.py",
         name="function",
         kind=EntityKind.FUNCTION,
-        location=Location(
-            file="file.py",
-            start_line=1,
-            end_line=1
-        ),
-        fully_qualified_name="module.function")
+        location=Location(file="file.py", start_line=1, end_line=1),
+        fully_qualified_name="module.function",
+    )
     print(node.model_dump(mode="json"))
     # Should print flattened structure with location_file, location_start_line, location_end_line

@@ -1,5 +1,6 @@
 from enum import IntEnum
 
+
 class SymbolKind(IntEnum):
     File = 1
     Module = 2
@@ -30,4 +31,4 @@ class SymbolKind(IntEnum):
 
     @classmethod
     def to_string(cls, value):
-        return cls(value).name if value in cls._value2member_map_ else 'Unknown'
+        return cls(value).name if value in cls._value2member_map_ else "Unknown"

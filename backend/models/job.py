@@ -5,23 +5,24 @@ import uuid
 from enum import Enum
 from .database import Base
 
+
 class JobStatus(str, Enum):
-    PENDING = 'pending'
-    STOPPED = 'stopped'
-    RUNNING = 'running'
-    COMPLETED = 'completed'
-    ERROR = 'error'
+    PENDING = "pending"
+    STOPPED = "stopped"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    ERROR = "error"
+
 
 def get_enum_values(enum_class):
     return [member.value for member in enum_class]
-
 
 
 class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    project_id = Column(UUID(as_uuid=True), ForeignKey('projects.id'), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
     status = Column(String, nullable=False, default=JobStatus.PENDING.value)
     progress = Column(Integer, default=0)  # Progress percentage (0-100)
     message = Column(String)  # Current operation description

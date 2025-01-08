@@ -10,6 +10,7 @@ from orchestrators.health import router as health_router
 from graph.database import initialize_graph_db, shutdown_graph_db, get_graph_db
 from models.database import get_db, init_db
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
@@ -22,25 +23,32 @@ async def lifespan(app: FastAPI):
         # Cleanup on shutdown
         await shutdown_graph_db()
 
+
 # Initialize FastAPI application
 app = FastAPI(
     title="GraphyDocs API",
     description="API for GraphyDocs system",
     version="1.0.0",
-    lifespan=lifespan, 
+    lifespan=lifespan,
     openapi_tags=[
         {"name": "file_system", "description": "File System Operations"},
         {"name": "analysis", "description": "Analysis Operations"},
         {"name": "management", "description": "Management Operations"},
-        {"name": "health", "description": "Health Checks"}
-    ]
+        {"name": "health", "description": "Health Checks"},
+    ],
 )
 
 # Include routers with dependencies
-app.include_router(file_system_router, dependencies=[Depends(get_db), Depends(get_graph_db)])
-app.include_router(analysis_router, dependencies=[Depends(get_db), Depends(get_graph_db)])
+app.include_router(
+    file_system_router, dependencies=[Depends(get_db), Depends(get_graph_db)]
+)
+app.include_router(
+    analysis_router, dependencies=[Depends(get_db), Depends(get_graph_db)]
+)
 app.include_router(health_router, dependencies=[Depends(get_db), Depends(get_graph_db)])
-app.include_router(management_router, dependencies=[Depends(get_db), Depends(get_graph_db)])
+app.include_router(
+    management_router, dependencies=[Depends(get_db), Depends(get_graph_db)]
+)
 
 # Configure CORS middleware
 app.add_middleware(

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional, Dict, Set, Union
 from dataclasses import dataclass
 
+
 class ConfigType(Enum):
     JSON = "json"
     YAML = "yaml"
@@ -14,48 +15,42 @@ class ConfigType(Enum):
     REQUIREMENTS = "requirements"
     PACKAGE = "package"
 
+
 @dataclass
 class ConfigPattern:
     extensions: Set[str] = None
     filenames: Set[str] = None
 
+
 class ConfigDetector:
     PATTERNS: Dict[ConfigType, ConfigPattern] = {
-        ConfigType.JSON: ConfigPattern(
-            extensions={'.json', '.jsonc', '.json5'}
-        ),
-        ConfigType.YAML: ConfigPattern(
-            extensions={'.yml', '.yaml'}
-        ),
-        ConfigType.TOML: ConfigPattern(
-            extensions={'.toml'}
-        ),
-        ConfigType.INI: ConfigPattern(
-            extensions={'.ini', '.cfg', '.conf'}
-        ),
+        ConfigType.JSON: ConfigPattern(extensions={".json", ".jsonc", ".json5"}),
+        ConfigType.YAML: ConfigPattern(extensions={".yml", ".yaml"}),
+        ConfigType.TOML: ConfigPattern(extensions={".toml"}),
+        ConfigType.INI: ConfigPattern(extensions={".ini", ".cfg", ".conf"}),
         ConfigType.ENV: ConfigPattern(
-            extensions={'.env'},
-            filenames={'.env.local', '.env.development', '.env.production'}
+            extensions={".env"},
+            filenames={".env.local", ".env.development", ".env.production"},
         ),
         ConfigType.DOCKER: ConfigPattern(
-            filenames={'dockerfile', 'docker-compose.yml', '.dockerignore'}
+            filenames={"dockerfile", "docker-compose.yml", ".dockerignore"}
         ),
         ConfigType.GIT: ConfigPattern(
-            filenames={'.gitignore', '.gitattributes', '.gitmodules'}
+            filenames={".gitignore", ".gitattributes", ".gitmodules"}
         ),
         ConfigType.REQUIREMENTS: ConfigPattern(
-            filenames={'requirements.txt', 'pipfile', 'poetry.lock', 'pyproject.toml'}
+            filenames={"requirements.txt", "pipfile", "poetry.lock", "pyproject.toml"}
         ),
         ConfigType.PACKAGE: ConfigPattern(
-            filenames={'package.json', 'setup.py', 'pyproject.toml', 'setup.cfg'}
-        )
+            filenames={"package.json", "setup.py", "pyproject.toml", "setup.cfg"}
+        ),
     }
 
     @classmethod
     def detect(cls, file_path: Union[Path, str]) -> Optional[ConfigType]:
         if isinstance(file_path, str):
             file_path = Path(file_path)
-            
+
         name = file_path.name.lower()
         ext = file_path.suffix.lower()
 
@@ -81,10 +76,15 @@ class ConfigDetector:
         return patterns
 
     @classmethod
-    def add_pattern(cls, config_type: ConfigType, extensions: Set[str] = None, filenames: Set[str] = None):
+    def add_pattern(
+        cls,
+        config_type: ConfigType,
+        extensions: Set[str] = None,
+        filenames: Set[str] = None,
+    ):
         if config_type not in cls.PATTERNS:
             cls.PATTERNS[config_type] = ConfigPattern(extensions=set(), filenames=set())
-        
+
         if extensions:
             cls.PATTERNS[config_type].extensions.update(extensions)
         if filenames:

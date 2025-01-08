@@ -7,10 +7,11 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class CodeGraphManager:
     def __init__(self, driver: AsyncDriver):
         """Initialize with Neo4j driver instance
-        
+
         Args:
             driver (AsyncDriver): Neo4j driver instance from dependency injection
         """
@@ -33,17 +34,20 @@ class CodeGraphManager:
             if edge.type not in edges_by_type:
                 edges_by_type[edge.type] = []
             edges_by_type[edge.type].append(edge.model_dump(mode="json"))
-        
+
         async with self.driver.session() as session:
             for edge_type, edge_batch in edges_by_type.items():
-                query = """
+                query = (
+                    """
                 UNWIND $edges as edge
                 MATCH (source:CodeNode {id: edge.source})
                 MATCH (target:CodeNode {id: edge.target})
                 MERGE (source)-[r:`%s`]->(target)
                 SET r += edge
-                """ % edge_type.value
-                
+                """
+                    % edge_type.value
+                )
+
                 await session.run(query, edges=edge_batch)
 
     @staticmethod
@@ -52,8 +56,10 @@ class CodeGraphManager:
         MATCH (source {id: $source_id}), (target {id: $target_id})
         MERGE (source)-[r:%s]->(target)
         SET r = $edge
-        """ % edge['type']
-        await tx.run(query, source_id=edge['source'], target_id=edge['target'], edge=edge)
+        """ % edge["type"]
+        await tx.run(
+            query, source_id=edge["source"], target_id=edge["target"], edge=edge
+        )
 
     async def get_full_graph(self) -> List[Dict]:
         query = """
@@ -65,7 +71,7 @@ class CodeGraphManager:
 
     async def create_base_schema(self):
         async with self.driver.session() as session:
-            # Create constraints            
+            # Create constraints
             await session.run("""
                 CREATE CONSTRAINT project_name IF NOT EXISTS 
                 FOR (p:Project) REQUIRE p.name IS UNIQUE
@@ -84,10 +90,10 @@ class CodeGraphManager:
     async def create_project(self, project: Project) -> bool:
         """
         Create or get existing project node.
-        
+
         Args:
             project: Project model instance
-            
+
         Returns:
             bool: True if new project was created, False if existing project was found
         """
@@ -96,52 +102,63 @@ class CodeGraphManager:
             "name": project.name,
             "created_at": project.created_at.isoformat(),
         }
-        
+
         async with self.driver.session() as session:
             # Try to find existing project first
-            result = await session.run("""
+            result = await session.run(
+                """
                 MATCH (p:Project {name: $name})
                 RETURN p
-            """, {"name": project.name})
-            
+            """,
+                {"name": project.name},
+            )
+
             existing = await result.single()
             if existing:
                 logger.info(f"Project {project.name} already exists in Neo4j")
                 return False
-                
+
             # Create new project if it doesn't exist
-            await session.run("""
+            await session.run(
+                """
                 MERGE (p:Project {id: $id, name: $name})
                 ON CREATE SET p.created_at = $created_at
-            """, project_dict)
+            """,
+                project_dict,
+            )
             logger.info(f"Created new project {project.name} in Neo4j")
             return True
 
     async def create_entity(self, entity: CodeNode, project_name: str):
         async with self.driver.session() as session:
             # Get project id first
-            result = await session.run("""
+            result = await session.run(
+                """
                 MATCH (p:Project {name: $project_name})
                 RETURN p.id as project_id
-            """, {"project_name": project_name})
-            
+            """,
+                {"project_name": project_name},
+            )
+
             record = await result.single()
             if not record:
                 raise ValueError(f"Project {project_name} not found")
-            
+
             props = entity.dict()
             props["project_id"] = record["project_id"]  # Add project_id to properties
-            
-            await session.run(f"""
+
+            await session.run(
+                f"""
                 MATCH (p:Project {{name: $project_name}})
                 CREATE (e:CodeNode:{entity.kind.value} $props)
                 CREATE (e)-[:PART_OF]->(p)
-            """, {
-                "props": props,
-                "project_name": project_name
-            })
+            """,
+                {"props": props, "project_name": project_name},
+            )
 
-    async def create_relationship(self, from_name: str, to_name: str, rel_type: RelationType):
+    async def create_relationship(
+        self, from_name: str, to_name: str, rel_type: RelationType
+    ):
         async with self.driver.session() as session:
             # Use string formatting for relationship type
             query = f"""
@@ -149,55 +166,65 @@ class CodeGraphManager:
                     (to:CodeNode {{name: $to}})
                 CREATE (from)-[r:{rel_type.value}]->(to)
             """
-            await session.run(query, {
-                "from": from_name,
-                "to": to_name
-            })
+            await session.run(query, {"from": from_name, "to": to_name})
 
     async def get_entity(self, name: str) -> Optional[Dict]:
         async with self.driver.session() as session:
-            result = await session.run("""
+            result = await session.run(
+                """
                 MATCH (e:CodeNode {name: $name})
                 RETURN e
-            """, {"name": name})
+            """,
+                {"name": name},
+            )
             record = await result.single()
             return record["e"] if record else None
 
     async def get_entity_relationships(self, name: str) -> List[Dict]:
         async with self.driver.session() as session:
-            result = await session.run("""
+            result = await session.run(
+                """
                 MATCH (e:CodeNode {name: $name})-[r]-(related)
                 RETURN type(r) as type, related.name as related_name, 
                        startNode(r).name as from_name, endNode(r).name as to_name
-            """, {"name": name})
+            """,
+                {"name": name},
+            )
             return [dict(record) for record in await result.fetch()]
 
     async def get_project_entities(self, project_name: str) -> List[Dict]:
         async with self.driver.session() as session:
-            result = await session.run("""
+            result = await session.run(
+                """
                 MATCH (e:CodeNode)-[:PART_OF]->(p:Project {name: $name})
                 RETURN e
-            """, {"name": project_name})
+            """,
+                {"name": project_name},
+            )
             return [dict(record["e"]) for record in await result.fetch()]
 
     async def delete_entity(self, name: str):
         async with self.driver.session() as session:
-            await session.run("""
+            await session.run(
+                """
                 MATCH (e:CodeNode {name: $name})
                 DETACH DELETE e
-            """, {"name": name})
+            """,
+                {"name": name},
+            )
 
-    async def delete_relationship(self, from_name: str, to_name: str, rel_type: RelationType):
+    async def delete_relationship(
+        self, from_name: str, to_name: str, rel_type: RelationType
+    ):
         async with self.driver.session() as session:
-            await session.run("""
+            await session.run(
+                """
                 MATCH (from:CodeNode {name: $from})-[r:$rel_type]->
                       (to:CodeNode {name: $to})
                 DELETE r
-            """, {
-                "from": from_name,
-                "to": to_name,
-                "rel_type": rel_type.value
-            })
+            """,
+                {"from": from_name, "to": to_name, "rel_type": rel_type.value},
+            )
 
     async def get_project_relationships(self, project_name: str) -> List[Dict]:
         query = """
@@ -206,10 +233,18 @@ class CodeGraphManager:
         """
         async with self.driver.session() as session:
             result = await session.run(query, project_name=project_name)
-            return [{"type": r["type"], "source": str(r["source"]), 
-                    "target": str(r["target"])} for r in await result.fetch()]
-        
-    async def update_analysis_state(self, session_id: str, status: str, progress: float, metadata: Dict = {}):
+            return [
+                {
+                    "type": r["type"],
+                    "source": str(r["source"]),
+                    "target": str(r["target"]),
+                }
+                for r in await result.fetch()
+            ]
+
+    async def update_analysis_state(
+        self, session_id: str, status: str, progress: float, metadata: Dict = {}
+    ):
         query = """
         MERGE (a:Analysis {sessionId: $session_id})
         SET a.status = $status,
@@ -219,7 +254,13 @@ class CodeGraphManager:
         RETURN a
         """
         async with self.driver.session() as session:
-            await session.run(query, session_id=session_id, status=status, progress=progress, metadata=metadata)
+            await session.run(
+                query,
+                session_id=session_id,
+                status=status,
+                progress=progress,
+                metadata=metadata,
+            )
 
     async def get_analysis_state(self, session_id: str) -> Optional[Dict]:
         query = """
@@ -233,7 +274,7 @@ class CodeGraphManager:
                 return {
                     "status": record.get("status"),
                     "progress": record.get("progress"),
-                    "metadata": record.get("metadata")
+                    "metadata": record.get("metadata"),
                 }
             return None
 
@@ -283,33 +324,36 @@ class CodeGraphManager:
         """
         async with self.driver.session() as session:
             await session.run(query, project_id=project_id)
-        
 
     async def get_project_graph(self, job_id: str) -> Dict:
         """
         Get the complete graph data for nodes with specific job_id.
-        
+
         Args:
             job_id (str): The ID of the analysis job
-            
+
         Returns:
             Dict containing nodes and edges for the project
         """
         async with self.driver.session() as session:
             # Get all nodes for the job_id
-            nodes_result = await session.run("""
+            nodes_result = await session.run(
+                """
                 MATCH (n:CodeNode)
                 WHERE n.job_id = $job_id
                 RETURN COLLECT(properties(n)) as nodes
-            """, {"job_id": job_id})
-            
+            """,
+                {"job_id": job_id},
+            )
+
             nodes_record = await nodes_result.single()
             nodes = nodes_record["nodes"] if nodes_record else []
-            
+
             # Get relationships between these nodes using their IDs
             if nodes:
-                node_ids = [node['id'] for node in nodes]
-                edges_result = await session.run("""
+                node_ids = [node["id"] for node in nodes]
+                edges_result = await session.run(
+                    """
                     MATCH (source:CodeNode)-[r]->(target:CodeNode)
                     WHERE source.id IN $node_ids AND target.id IN $node_ids
                     RETURN COLLECT({
@@ -318,30 +362,31 @@ class CodeGraphManager:
                         type: type(r),
                         properties: properties(r)
                     }) as edges
-                """, {"node_ids": node_ids})
-                
+                """,
+                    {"node_ids": node_ids},
+                )
+
                 edges_record = await edges_result.single()
                 raw_edges = edges_record["edges"] if edges_record else []
-                
+
                 # Convert edges to proper format
                 edges = []
                 for edge in raw_edges:
                     edge_data = {
                         "source": edge["source"],
                         "target": edge["target"],
-                        "type": edge["type"]
+                        "type": edge["type"],
                     }
                     if edge.get("properties"):
                         edge_data.update(edge["properties"])
                     edges.append(edge_data)
             else:
                 edges = []
-                
-            logger.debug(f"Retrieved {len(nodes)} nodes and {len(edges)} edges for job {job_id}")
-            return {
-                "nodes": nodes,
-                "edges": edges
-            }
+
+            logger.debug(
+                f"Retrieved {len(nodes)} nodes and {len(edges)} edges for job {job_id}"
+            )
+            return {"nodes": nodes, "edges": edges}
 
     async def close(self):
         """Close the Neo4j driver connection."""
@@ -353,6 +398,7 @@ class CodeGraphManager:
         """Ensure driver is closed on garbage collection."""
         if self.driver:
             import asyncio
+
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():

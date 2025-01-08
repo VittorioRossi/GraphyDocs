@@ -6,10 +6,12 @@ import os
 import asyncio
 
 from utils.logging import get_logger
+
 logger = get_logger(__name__)
 
+
 class AsyncGraphDatabaseManager:
-    _instance: Optional['AsyncGraphDatabaseManager'] = None
+    _instance: Optional["AsyncGraphDatabaseManager"] = None
     _initialized = False
     _connected = False  # Add connection state tracking
 
@@ -44,7 +46,7 @@ class AsyncGraphDatabaseManager:
                 self.driver = AsyncGraphDatabase.driver(
                     neo4j_uri,
                     auth=(neo4j_user, neo4j_password),
-                    max_connection_lifetime=3600
+                    max_connection_lifetime=3600,
                 )
                 # Verify connection
                 async with self.driver.session() as session:
@@ -54,16 +56,12 @@ class AsyncGraphDatabaseManager:
             except ValueError as ve:
                 self._connected = False
                 logger.error(f"Neo4j configuration error: {str(ve)}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=str(ve)
-                )
+                raise HTTPException(status_code=500, detail=str(ve))
             except Exception as e:
                 self._connected = False
                 logger.error(f"Failed to connect to Neo4j: {str(e)}")
                 raise HTTPException(
-                    status_code=500,
-                    detail=f"Database connection failed: {str(e)}"
+                    status_code=500, detail=f"Database connection failed: {str(e)}"
                 )
 
     async def disconnect(self) -> None:
@@ -89,33 +87,41 @@ class AsyncGraphDatabaseManager:
         """Context manager for database sessions."""
         if not self.driver:
             await self.connect()
-        
+
         session = self.driver.session()
         try:
             yield session
         finally:
             await session.close()
 
+
 # Singleton instance
 graph_db = AsyncGraphDatabaseManager()
 
+
 async def initialize_graph_db(max_retries: int = 3, retry_delay: float = 5.0):
     """Initialize the database connection on startup with retry logic."""
-    
+
     for attempt in range(max_retries):
         try:
             await graph_db.connect()
             return
         except Exception as e:
             if attempt == max_retries - 1:
-                logger.error(f"Failed to connect after {max_retries} attempts: {str(e)}")
+                logger.error(
+                    f"Failed to connect after {max_retries} attempts: {str(e)}"
+                )
                 raise
-            logger.warning(f"Connection attempt {attempt + 1} failed, retrying in {retry_delay} seconds...")
+            logger.warning(
+                f"Connection attempt {attempt + 1} failed, retrying in {retry_delay} seconds..."
+            )
             await asyncio.sleep(retry_delay)
+
 
 async def shutdown_graph_db():
     """Close the database connection on shutdown."""
     await graph_db.disconnect()
+
 
 async def get_graph_db() -> AsyncGenerator[AsyncDriver, None]:
     """Dependency for getting the database driver."""
@@ -125,7 +131,4 @@ async def get_graph_db() -> AsyncGenerator[AsyncDriver, None]:
         yield graph_db.driver
     except Exception as e:
         logger.error(f"Neo4j connection error: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")

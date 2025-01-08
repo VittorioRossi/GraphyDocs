@@ -3,6 +3,7 @@ from typing import Dict, Optional, List
 from pathlib import Path
 from .lsp_client import LSPClient
 
+
 class LanguageServerManager:
     def __init__(self):
         self.servers: Dict[str, asyncio.subprocess.Process] = {}
@@ -35,13 +36,13 @@ class LanguageServerManager:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
             )
-            
+
             self.servers[language] = process
             client = LSPClient(process.stdout, process.stdin)
             await client.initialize(str(Path.cwd()))
             self.clients[language] = client
             return True
-            
+
         except Exception:
             await self.stop_server(language)
             return False
@@ -71,11 +72,15 @@ class LanguageServerManager:
     def _get_server_command(self, language: str) -> Optional[List[str]]:
         commands = {
             "python": ["pylsp"],
-            "php": ["php", "-r", "require'vendor/autoload.php';Phpactor\Extension\LanguageServer\LanguageServerExtension::runtime()->run();"],
+            "php": [
+                "php",
+                "-r",
+                "require'vendor/autoload.php';Phpactor\Extension\LanguageServer\LanguageServerExtension::runtime()->run();",
+            ],
             "javascript": ["typescript-language-server", "--stdio"],
             "typescript": ["typescript-language-server", "--stdio"],
             "dockerfile": ["dockerfile-langserver", "--stdio"],
             "c": ["clangd"],
-            "cpp": ["clangd"]
+            "cpp": ["clangd"],
         }
         return commands.get(language)

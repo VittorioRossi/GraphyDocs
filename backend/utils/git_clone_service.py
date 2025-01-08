@@ -3,123 +3,118 @@ import tempfile
 import shutil
 from typing import Dict, Optional, List, Union
 from pathlib import Path
-from git import Repo
+from git import Repo, GitCommandError
+from git.cmd import Git
 from dataclasses import dataclass
 from utils.errors import GitCloneError
 
+
 @dataclass
 class GitConfig:
-    """Configuration for Git operations"""
     access_token: Optional[str] = None
-    branch: str = "main"
+    branch: Optional[str] = None
     depth: Optional[int] = None
     sparse_checkout: Optional[List[str]] = None
     ssh_key: Optional[str] = None
 
+
 class GitCloneOps:
     def __init__(self, config: Optional[GitConfig] = None):
-        """
-        Initialize with optional configuration.
-        
-        Args:
-            config: GitConfig object with authentication and clone settings
-        """
         self.config = config or GitConfig()
-        self.temp_dir = None
-        self._setup_temp_dir()
-
-    def _setup_temp_dir(self) -> None:
-        """Create temporary directory for operations"""
         self.temp_dir = tempfile.mkdtemp()
 
-    def _get_auth_url(self, repo_url: str) -> str:
-        """Add authentication to URL if token provided"""
-        if not self.config.access_token:
-            return repo_url
-            
-        if repo_url.startswith("https://"):
-            return repo_url.replace(
-                "https://",
-                f"https://{self.config.access_token}@"
-            )
-        return repo_url
+    def _get_default_branch(self, repo_url: str) -> str:
+        try:
+            git = Git()
+            env = {
+                "GIT_TERMINAL_PROMPT": "0",
+                "GIT_ASKPASS": "echo",
+                "GIT_USERNAME": "oauth2",
+                "GIT_PASSWORD": self.config.access_token,
+            }
 
-    def _setup_ssh(self) -> None:
-        """Configure SSH if key provided"""
-        if self.config.ssh_key:
-            ssh_path = Path.home() / ".ssh" / "id_rsa"
-            ssh_path.parent.mkdir(exist_ok=True)
-            ssh_path.write_text(self.config.ssh_key)
-            ssh_path.chmod(0o600)
+            ls_remote = git.ls_remote("--heads", repo_url, env=env).split("\n")
+            if not ls_remote:
+                return "master"
+
+            for ref in ls_remote:
+                if "master" in ref:
+                    return "master"
+                if "main" in ref:
+                    return "main"
+
+            # If neither main nor master found, use first available branch
+            first_branch = ls_remote[0].split("refs/heads/")[-1].strip()
+            return first_branch
+
+        except Exception:
+            return "master"  # Fallback if detection fails
 
     def clone_repository(
-        self,
-        repo_url: str,
-        local_path: Optional[str] = None,
-        return_files: bool = True
+        self, repo_url: str, local_path: Optional[str] = None, return_files: bool = True
     ) -> Union[Dict[str, str], str]:
-        """
-        Clone a GitHub repository with configured settings.
-        
-        Args:
-            repo_url: Repository URL
-            local_path: Optional custom path to clone to
-            return_files: If True, returns dict of file contents, else clone path
-            
-        Returns:
-            Dict of file contents or clone path
-        """
         try:
-            self._setup_ssh()
-            auth_url = self._get_auth_url(repo_url)
-            
             clone_path = local_path or os.path.join(
-                self.temp_dir,
-                repo_url.split('/')[-1].replace('.git', '')
+                self.temp_dir, repo_url.split("/")[-1].replace(".git", "")
             )
 
-            # Validate URL format
-            if not repo_url.startswith(('https://github.com/', 'git@github.com:')):
+            if not repo_url.startswith(("https://github.com/", "git@github.com:")):
                 raise GitCloneError("Invalid GitHub repository URL format")
 
-            # Configure clone options
-            clone_args = {
-                'url': auth_url,
-                'to_path': clone_path,
-                'branch': self.config.branch,
+            branch = self.config.branch or self._get_default_branch(repo_url)
+
+            env = {
+                "GIT_TERMINAL_PROMPT": "0",
+                "GIT_ASKPASS": "echo",
+                "GIT_USERNAME": "oauth2",
+                "GIT_PASSWORD": self.config.access_token,
             }
-            
+
+            clone_args = {
+                "url": repo_url,
+                "to_path": clone_path,
+                "branch": branch,
+                "env": env,
+            }
+
             if self.config.depth:
-                clone_args['depth'] = self.config.depth
+                clone_args["depth"] = self.config.depth
 
             try:
-                # Attempt to clone repository
                 repo = Repo.clone_from(**clone_args)
-            except Exception as e:
+            except GitCommandError as e:
                 error_msg = str(e).lower()
-                if 'authentication failed' in error_msg:
-                    raise GitCloneError("Authentication failed. Please check your GitHub token.")
-                elif 'not found' in error_msg:
-                    raise GitCloneError("Repository not found. Please check the URL and your access permissions.")
-                elif 'permission denied' in error_msg:
-                    raise GitCloneError("Permission denied. Private repository requires valid GitHub token.")
+                if "authentication failed" in error_msg:
+                    raise GitCloneError("Authentication failed. Check GitHub token.")
+                elif "not found" in error_msg:
+                    raise GitCloneError(
+                        "Repository not found. Check URL and permissions."
+                    )
+                elif "permission denied" in error_msg:
+                    raise GitCloneError(
+                        "Permission denied. Private repo requires valid token."
+                    )
+                elif "remote branch" in error_msg and "not found" in error_msg:
+                    # Try without branch specification
+                    clone_args.pop("branch")
+                    repo = Repo.clone_from(**clone_args)
                 else:
                     raise GitCloneError(f"Clone failed: {str(e)}")
 
-            # Handle sparse checkout
             if self.config.sparse_checkout:
-                repo.git.sparse_checkout('set', ' '.join(self.config.sparse_checkout))
+                repo.git.sparse_checkout("set", " ".join(self.config.sparse_checkout))
 
             if not return_files:
                 return clone_path
 
-            # Read file contents
             files = {}
             for root, _, filenames in os.walk(clone_path):
                 for filename in filenames:
                     file_path = os.path.join(root, filename)
                     try:
-                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        with open(
+                            file_path, "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             relative_path = os.path.relpath(file_path, clone_path)
                             files[relative_path] = f.read()
                     except Exception as e:
@@ -130,13 +125,11 @@ class GitCloneOps:
         except GitCloneError:
             raise
         except Exception as e:
-            raise GitCloneError(f"Unexpected error during clone: {str(e)}")
+            raise GitCloneError(f"Unexpected error: {str(e)}")
 
-    def cleanup(self) -> None:
-        """Remove temporary directory and files"""
+    def cleanup(self):
         if self.temp_dir and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
     def __del__(self):
-        """Cleanup on object destruction"""
         self.cleanup()
