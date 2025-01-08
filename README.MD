@@ -1,0 +1,13 @@
+# GraphyDocs Project Report
+
+GraphyDocs is a code analysis tool built with Python and TypeScript/React that generates graph-based representations of codebases. The project aims to create a language-agnostic system using Language Server Protocol (LSP) to build abstract code representations, ultimately intended for LLM-based code analysis.
+
+The system is built around a Python backend that implements LSP client interfaces and graph algorithms, paired with a React/TypeScript frontend using ForceGraph for visualization. Data storage is handled by Neo4j for graph relationships, with Redis integration prepared for future caching optimizations. The system employs an asynchronous WebSocket architecture for real-time updates.
+
+The core LSP implementation currently focuses on two main operations: CONTAINS relationships mapping across files, classes, and functions, as well as References tracking (though the latter is implemented but not yet integrated into the current algorithm). The system utilizes an asynchronous architecture to manage the inherent latency of LSP calls and database operations. While the backend efficiently processes these operations, the frontend visualization currently faces scalability challenges when rendering larger graphs.
+
+One of the most significant challenges was managing analysis state and session handling. The system needed to handle multiple scenarios: starting new analyses, connecting to ongoing analyses, and retrieving partially created graphs. This complexity required careful state management and robust WebSocket implementation. The project implements a generalized LSP interface that allows straightforward extension to new relationship types, making future expansions more manageable.
+
+The asynchronous architecture proved crucial for handling LSP and database latency effectively. While a pooling manager was initially considered for performance optimization, this feature was deprioritized to focus on core algorithm development. Redis infrastructure is in place but not yet utilized, providing opportunity for future performance improvements through caching.
+
+The project successfully processes Python codebases and establishes a solid foundation for future LLM integration, though larger graph visualizations require additional optimization work. The modular design ensures that new LSP-based relationships can be easily added to enhance the graph's representation of code structure.
