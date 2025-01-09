@@ -20,6 +20,7 @@
     "@xyflow/react": "^12.3.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "d3": "^7.9.0",
     "dagre": "^0.8.5",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",

@@ -23,10 +23,11 @@ class JobHandler:
             return UUID(id)
         return id
 
-    async def create_job(self, project_id: Union[str, UUID]) -> Job:
+    async def create_job(self, project_id: Union[str, UUID], analyzer_type:str) -> Job:
         job = Job(
             project_id=self._to_uuid(project_id),
             status=JobStatus.PENDING,
+            analyzer_type=analyzer_type,
             progress=0,
             message="Starting analysis...",
             sequence=0,

@@ -168,22 +168,43 @@ export function FileUpload() {
     }
   };
 
+  useEffect(() => {
+    if (uploadState.status === 'complete' || uploadState.status === 'error') {
+      const timer = setTimeout(() => {
+        setUploadState({
+          status: 'idle',
+          progress: 0,
+          message: ''
+        });
+      }, 5000);
+  
+      return () => clearTimeout(timer);
+    }
+  }, [uploadState]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 p-6">
       <div className="w-full max-w-[800px] space-y-6">
         <Card className="bg-white shadow-xl border-0">
           <CardHeader className="border-b bg-white/50 backdrop-blur-sm">
-            <CardTitle className="text-2xl font-bold text-slate-800">Project Upload</CardTitle>
+            <CardTitle className="text-2xl font-bold">Project Upload</CardTitle>
           </CardHeader>
           <CardContent className="pt-6">
             <Tabs defaultValue="github" className="w-full">
               <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="file" className="flex items-center gap-2">
+                <TabsTrigger value="file" className={cn(
+                  "flex items-center gap-2 py-2 px-4 rounded font-bold",
+                  "bg-gray-200 hover:bg-gray-300 text-slate-800",
+                  "data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+                )}>
                   <FaFile className="h-4 w-4" />
                   File Upload
                 </TabsTrigger>
-                <TabsTrigger value="github" className="flex items-center gap-2">
+                <TabsTrigger value="github" className={cn(
+                  "flex items-center gap-2 py-2 px-4 rounded font-bold",
+                  "bg-gray-200 hover:bg-gray-300 text-slate-800",
+                  "data-[state=active]:bg-indigo-600 data-[state=active]:text-white"
+                )}>
                   <FaGithub className="h-4 w-4" />
                   GitHub URL
                 </TabsTrigger>
@@ -225,6 +246,7 @@ export function FileUpload() {
                         className="pl-10 border-2"
                         required
                         disabled={uploadState.status === 'uploading'}
+                        autoComplete="off"
                       />
                     </div>
                     <div className="relative">
@@ -235,6 +257,7 @@ export function FileUpload() {
                         onChange={(e) => setGithubToken(e.target.value)}
                         className="border-2"
                         disabled={uploadState.status === 'uploading'}
+                        autoComplete="off"
                       />
                       <p className="text-xs text-slate-500 mt-1">
                         For private repositories, provide a GitHub token with repo access
@@ -244,9 +267,18 @@ export function FileUpload() {
                   <Button 
                     type="submit" 
                     disabled={uploadState.status === 'uploading'}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                    className={cn(
+                      "w-full font-bold py-2 px-4 rounded",
+                      uploadState.status === 'uploading' ? 'bg-blue-600' : 'bg-indigo-600 hover:bg-indigo-700',
+                      "text-white"
+                    )}
                   >
-                    Clone Repository
+                    {uploadState.status === 'uploading' ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="loader"></span>
+                        Cloning...
+                      </div>
+                    ) : 'Clone Repository'}
                   </Button>
                 </form>
               </TabsContent>
@@ -257,7 +289,7 @@ export function FileUpload() {
                 <Progress value={uploadState.progress} className="h-2" />
                 <p className={cn(
                   "text-sm text-center",
-                  uploadState.status === 'error' ? 'text-red-600' : 'text-slate-600'
+                  uploadState.status === 'error' ? 'text-red-600' : 'text-green-600'
                 )}>
                   {uploadState.message}
                 </p>
@@ -288,7 +320,7 @@ export function FileUpload() {
                       <Button
                         variant="outline"
                         onClick={() => navigate(`/graph/${project.id}`)}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded"
                       >
                         <FaEye className="h-4 w-4" />
                         View
@@ -297,13 +329,14 @@ export function FileUpload() {
                         <AlertDialogTrigger asChild>
                           <Button
                             variant="destructive"
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded"
                           >
                             <FaTrash className="h-4 w-4" />
                             Delete
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent className="bg-white dark:bg-gray-800 shadow-lg">                          <AlertDialogHeader>
+                        <AlertDialogContent className="bg-white dark:bg-gray-800 shadow-lg">                          
+                          <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                             <AlertDialogDescription>
                               This will permanently delete the project "{project.name}" and all its associated data.
@@ -332,3 +365,19 @@ export function FileUpload() {
     </div>
   );
 }
+
+<style jsx>{`
+  .loader {
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top: 4px solid white;
+    width: 16px;
+    height: 16px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`}</style>

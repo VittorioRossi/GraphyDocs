@@ -19,6 +19,7 @@ class BatchUpdate:
 
 
 class GraphMapper(ABC):
+    analyzer_type: str
     def __init__(self):
         self.lsp_manager = LanguageServerManager()
 

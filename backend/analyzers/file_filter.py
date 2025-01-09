@@ -13,24 +13,32 @@ class FilterPattern:
 class FileFilter:
     DEFAULT_IGNORES = {
         # Version Control
-        ".git/",
-        ".svn/",
-        ".hg/",
+        ".git",
+        ".svn",
+        ".hg",
         # Dependencies
-        "node_modules/",
-        "venv/",
-        ".env/",
-        "vendor/",
+        "node_modules",
+        "venv",
+        ".env",
+        "vendor",
         # Build artifacts
-        "dist/",
-        "build/",
+        "dist",
+        "build",
         "*.pyc",
-        "__pycache__/",
+        "__pycache__",
         # IDE files
-        ".vscode/",
-        ".idea/",
+        ".vscode",
+        ".idea",
         "*.swp",
         ".DS_Store",
+        # Documentation
+        "docs",
+        "doc",
+        "site",
+        # Temporary files
+        "*.log",
+        "*.tmp",
+        "*.temp",
     }
 
     @classmethod

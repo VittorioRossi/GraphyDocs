@@ -5,6 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Optional, Union
 from uuid import UUID
+import sys 
 
 from algorithms.factory import get_analyzer_by_type
 from algorithms.interface import GraphMapper
@@ -19,6 +20,8 @@ from models.database import AsyncSession, get_db
 from models.job import Job, JobStatus
 from models.project import Project
 from neo4j import AsyncDriver
+from algorithms.interface import BatchUpdate
+from utils.task_manager import AnalysisTaskManager
 
 # Pydantic import
 from pydantic import BaseModel
@@ -30,7 +33,7 @@ from utils.job_handler import JobHandler
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-
+logger.disabled = True
 
 def convert_uuid(obj):
     """Recursively convert UUID objects to strings in nested data structures."""
@@ -42,6 +45,20 @@ def convert_uuid(obj):
         return str(obj)
     return obj
 
+class AnalysisStats(BaseModel):
+    """
+    Analysis status data.
+
+    Attributes:
+        status: The current status of the analysis
+        progress: The current progress of the analysis
+        error: The error message if the analysis failed
+    """
+
+    progress: int
+    processed_files: int
+    total_files: int 
+    error: str = ""
 
 class AnalysisRequest(BaseModel):
     """
@@ -70,6 +87,7 @@ class AnalysisResponse(BaseModel):
     """
 
     job_id: str
+    analysis_stats: AnalysisStats
     status: str = "started"
 
 
@@ -117,14 +135,18 @@ class AnalysisOrchestrator:
     ):
         self.job_handler = job_handler
         self.graph_manager = graph_manager
+        self.task_manager = AnalysisTaskManager()
         self.redis = redis_client
 
         self.analyzers: Dict[UUID, GraphMapper] = {}
         self.connected_clients = defaultdict(set)
         self._active_websockets = set()  # Track all active connections
-        self._disposed = False
         self._last_broadcast_sequence = defaultdict(int)
         self._broadcast_lock = asyncio.Lock()
+        self._disposed: bool = False
+
+        self._register_cleanup()
+
 
     async def handle_new_connection(self, websocket: WebSocket):
         """Handle new websocket connection"""
@@ -137,19 +159,16 @@ class AnalysisOrchestrator:
             while True:
                 data = await websocket.receive_json()
                 logger.info(f"Received WebSocket message: {data}")
-
                 await self.handle_message(websocket, data)
-
         except WebSocketDisconnect:
             logger.info("WebSocket disconnected")
         except Exception as e:
             logger.error(f"WebSocket error: {str(e)}", exc_info=True)
         finally:
             self._active_websockets.discard(websocket)
-            # Remove websocket from all job subscriptions
+            # Remove websocket from job subscriptions without stopping analysis
             for clients in self.connected_clients.values():
                 clients.discard(websocket)
-            await self.cleanup()
 
     async def handle_message(self, websocket: WebSocket, message: dict):
         """Handle incoming messages with error handling"""
@@ -223,7 +242,12 @@ class AnalysisOrchestrator:
             if not latest_job:
                 analyzer = get_analyzer_by_type(analyzer_type)
                 job_id = await self.start_analysis(project_id, analyzer)
-                return AnalysisResponse(job_id=str(job_id)).model_dump(mode="json")
+
+                self.connected_clients[job_id].add(websocket)
+                logger.info(f"Client auto-subscribed to new job {job_id}")
+
+                return AnalysisResponse(job_id=str(job_id),
+                                        analysis_stats=AnalysisStats(progress=0, processed_files=0, total_files=0)).model_dump(mode="json")
 
             elif (
                 latest_job.status == JobStatus.COMPLETED
@@ -255,13 +279,15 @@ class AnalysisOrchestrator:
 
         # if there is a checkpoint the _run_analysis will start from there
         task = asyncio.create_task(self._run_analysis(job))
-        task.add_done_callback(self._handle_analysis_completion)
+        task.add_done_callback(lambda t: asyncio.create_task(self._handle_analysis_completion(t, job.id)))
+
 
         return AnalysisResponseRunning(
             job_id=str(job.id),
             partial_graph=await self.graph_manager.get_project_graph(
                 str(job.project_id)
             ),
+            analysis_stats=AnalysisStats(progress=job.progress, processed_files=0, total_files=0)
         ).model_dump(mode="json")
 
     async def _handle_resume_analysis(self, job: Job) -> AnalysisResponseRunning:
@@ -284,32 +310,57 @@ class AnalysisOrchestrator:
         job_id = str(job_id)
         graph_data = await self.graph_manager.get_project_graph(job_id)
         return AnalysisResponseAlreadyCompleted(
-            job_id=job_id, graph_data=graph_data
+            job_id=job_id, graph_data=graph_data, analysis_stats=AnalysisStats(progress=100, processed_files=0, total_files=0)
         ).model_dump(mode="json")
 
-    def _handle_analysis_completion(self, task):
+    async def _handle_analysis_completion(self, task: asyncio.Task, job_id: UUID):
+        """Handle analysis task completion"""
         try:
             task.result()
+        except asyncio.CancelledError:
+            logger.info(f"Analysis task for job {job_id} was cancelled")
         except Exception as e:
-            logger.error(f"Analysis task failed: {str(e)}", exc_info=True)
+            logger.error(f"Analysis task for job {job_id} failed: {str(e)}", exc_info=True)
+        finally:
+            await self.task_manager.remove_task(job_id)
+            if job_id in self.analyzers:
+                del self.analyzers[job_id]
+
 
     async def _handle_stop_analysis(self, data: dict):
         """Handle request to stop analysis"""
         job_id = UUID(data["job_id"])
+        
+        # Cancel the analysis task
+        await self.task_manager.cancel_task(job_id)
+        
         if job_id in self.analyzers:
             await self.analyzers[job_id].stop()
             await self.job_handler.update_status(job_id, JobStatus.STOPPED)
-            return StopAnalysisResponse(job_id=str(job_id)).model_dump(mode="json")
+            return StopAnalysisResponse(
+                job_id=str(job_id), 
+                analysis_stats=AnalysisStats(0)
+            ).model_dump(mode="json")
 
         raise JobNotFoundError(f"Job {job_id} not found")
+
 
     async def _handle_get_status(self, data: dict, websocket: WebSocket):
         """Handle request to get the status of a job"""
         job_id = UUID(data["job_id"])
         job = await self.job_handler.get_job(job_id)
         if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
-        return job.dict()
+            raise JobNotFoundError(f"Job {job_id} not found")
+        
+        return {
+            "status": job.status,
+            "analysis_stats": {
+                "progress": job.progress,
+                "processed_files": 0,
+                "total_files": 0,
+                "error": job.error or ""
+            }
+        }
 
     async def _handle_subscribe(self, data: dict, websocket: WebSocket):
         """Handle request to subscribe to job updates with validation"""
@@ -401,31 +452,27 @@ class AnalysisOrchestrator:
     async def start_analysis(self, project_id: UUID, analyzer: GraphMapper) -> UUID:
         """Start analysis with validation"""
         try:
-            # Validate project before starting analysis
             project = await self.validate_project(project_id)
-
             is_new = await self.graph_manager.create_project(project)
 
             if not is_new:
                 logger.info(f"Project {project_id} already exists in Neo4j")
 
-            # Start new analysis with checkpoint if provided
             job = await self.job_handler.create_job(
                 project_id,
+                analyzer_type=analyzer.analyzer_type,
             )
             self.analyzers[job.id] = analyzer
 
+            # Create and store analysis task
             task = asyncio.create_task(self._run_analysis(job))
-            task.add_done_callback(self._handle_analysis_completion)
+            await self.task_manager.add_task(job.id, task)
+            task.add_done_callback(lambda t: asyncio.create_task(self._handle_analysis_completion(t, job.id)))
+            
             return job.id
 
-        except (ProjectNotFoundError, FileNotFoundError):
-            raise
         except Exception as e:
-            logger.error(
-                f"Failed to start analysis for project {project_id}: {str(e)}",
-                exc_info=True,
-            )
+            logger.error(f"Failed to start analysis for project {project_id}: {str(e)}", exc_info=True)
             await self._broadcast(
                 project_id,
                 {
@@ -481,23 +528,32 @@ class AnalysisOrchestrator:
             await self._handle_batch_broadcast(job.id, cleanup_batch)
 
             await self.job_handler.update_status(job.id, JobStatus.COMPLETED)
-            await self._broadcast_completion(job.id)
+            await self._broadcast(
+                job.id,
+                {
+                    "type": "analysis_complete",
+                    "data": {
+                        "job_id": str(job.id),
+                    },
+                }
+            )
 
         except Exception as e:
             logger.error(f"Analysis failed for job {job.id}: {str(e)}", exc_info=True)
             await self.job_handler.update_status(job.id, "error", str(e))
             await self._broadcast_error(job.id, str(e))
             # Rollback changes in case of failure
-            await self.graph_manager.delete_project(str(job.project.id))
+            await self.graph_manager.delete_project(str(job.project_id))
         finally:
             if job.id in self.analyzers:
                 await self.analyzers[job.id].stop()
                 del self.analyzers[job.id]
 
-    async def _handle_batch_broadcast(self, job_id: UUID, batch):
+    async def _handle_batch_broadcast(self, job_id: UUID, batch: BatchUpdate):
         """Broadcast batch updates to connected clients with sequence tracking"""
         if not self.connected_clients[job_id]:
             return
+        
 
         async with self._broadcast_lock:
             sequence = await self.job_handler.increment_sequence(job_id)
@@ -508,18 +564,16 @@ class AnalysisOrchestrator:
                 return
 
             self._last_broadcast_sequence[job_id] = sequence
-
             # Convert batch to dict using model_dump
             batch_dict = {
                 "nodes": [node.model_dump(mode="json") for node in batch.nodes],
                 "edges": [edge.model_dump(mode="json") for edge in batch.edges],
-                "processed_files": batch.processed_files,
-                "failed_files": [f.dict() for f in batch.failed_files]
-                if batch.failed_files
-                else [],
-                "status": batch.status,
-                "statistics": batch.statistics if batch.statistics else None,
-                "sequence": sequence,  # Add sequence to track order
+                "analysis_stats": {
+                    "processed_files": batch.processed_files,
+                    "total_files": batch.statistics['total_files'],
+                    "error": batch.error,
+                },
+                "sequence": sequence
             }
 
             # Store in Redis with expiration
@@ -529,12 +583,6 @@ class AnalysisOrchestrator:
 
             # Broadcast to clients
             await self._broadcast(job_id, {"type": "batch_update", "data": batch_dict})
-
-    async def _broadcast_completion(self, job_id: UUID):
-        """Broadcast job completion"""
-        await self._broadcast(
-            job_id, {"type": "analysis_complete", "data": {"job_id": str(job_id)}}
-        )
 
     async def _broadcast_error(self, job_id: UUID, error: str):
         """Broadcast error message"""
@@ -569,45 +617,62 @@ class AnalysisOrchestrator:
         except Exception as e:
             logger.error(f"Broadcast error: {str(e)}", exc_info=True)
 
-    async def cleanup(self):
-        """Cleanup all resources"""
+    def _register_cleanup(self):
+        """Register cleanup handler for module reloading"""
+        import sys
+        if hasattr(sys.modules[self.__module__], '_cleanup_tasks'):
+            cleanup_tasks = sys.modules[self.__module__]._cleanup_tasks
+        else:
+            cleanup_tasks = set()
+            sys.modules[self.__module__]._cleanup_tasks = cleanup_tasks
+        
+        cleanup_tasks.add(self)
+        logger.debug("Registered orchestrator for cleanup")
+
+    async def dispose(self):
+        """Dispose of the orchestrator and all its resources"""
         if self._disposed:
             return
 
         self._disposed = True
-        logger.info("Starting orchestrator cleanup")
+        logger.info("Starting orchestrator disposal")
 
-        # Clear sequence tracking
-        self._last_broadcast_sequence.clear()
-
-        # Close all websocket connections
+        # Stop accepting new connections
         for ws in self._active_websockets.copy():
             try:
                 await ws.close()
-            except:  # noqa
-                logger.error("Error closing websocket connection")
-        self._active_websockets.clear()
+            except Exception as e:
+                logger.error(f"Error closing websocket: {e}")
 
-        # Stop all analyzers and dispose of LSP pools
-        for analyzer in list(self.analyzers.values()):
+        self._active_websockets.clear()
+        self.connected_clients.clear()
+
+        # Dispose task manager
+        await self.task_manager.dispose()
+
+        # Stop and cleanup analyzers
+        for job_id, analyzer in list(self.analyzers.items()):
             try:
-                if hasattr(analyzer, "lsp_pool"):
-                    await analyzer.lsp_pool.dispose()
+                logger.info(f"Stopping analyzer for job {job_id}")
                 await analyzer.stop()
             except Exception as e:
-                logger.error(f"Error stopping analyzer: {str(e)}")
-        self.analyzers.clear()
+                logger.error(f"Error stopping analyzer for job {job_id}: {e}")
 
-        # Clear all client connections
-        self.connected_clients.clear()
-        logger.info("Orchestrator cleanup completed")
+        self.analyzers.clear()
+        self._last_broadcast_sequence.clear()
+
+        logger.info("Orchestrator disposal completed")
 
     def __del__(self):
         """Ensure cleanup on garbage collection"""
         if not self._disposed:
             logger.warning("Orchestrator was not properly disposed")
-            asyncio.create_task(self.cleanup())
-
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.dispose())
+            except Exception as e:
+                logger.error(f"Error in Orchestrator __del__: {e}")
 
 # Router
 router = APIRouter(
@@ -620,36 +685,47 @@ router = APIRouter(
 )
 
 
+# Update the router with cleanup handling
+async def cleanup_orchestrators():
+    """Cleanup all orchestrator instances during reload"""
+    if hasattr(sys.modules[__name__], '_cleanup_tasks'):
+        cleanup_tasks = sys.modules[__name__]._cleanup_tasks
+        for orchestrator in list(cleanup_tasks):
+            try:
+                await orchestrator.dispose()
+            except Exception as e:
+                logger.error(f"Error during orchestrator cleanup: {e}")
+        cleanup_tasks.clear()
+
+
 async def get_orchestrator(
-    db: AsyncSession = Depends(get_db), neo4j: AsyncDriver = Depends(get_graph_db)
+    db: AsyncSession = Depends(get_db),
+    neo4j: AsyncDriver = Depends(get_graph_db)
 ) -> AnalysisOrchestrator:
+    await cleanup_orchestrators()
+    
     redis_client = Redis(host="redis", port=6379, db=0, decode_responses=True)
     return AnalysisOrchestrator(
         JobHandler(db),
-        CodeGraphManager(neo4j),  # Pass the driver directly
+        CodeGraphManager(neo4j),
         redis_client,
     )
 
-
 @router.websocket("/ws")
 async def websocket_endpoint(
-    websocket: WebSocket, orchestrator: AnalysisOrchestrator = Depends(get_orchestrator)
+    websocket: WebSocket,
+    orchestrator: AnalysisOrchestrator = Depends(get_orchestrator)
 ):
-    """
-    WebSocket endpoint for real-time analysis updates.
-
-    Handles:
-    - Initial connection
-    - Analysis status updates
-    - Error notifications
-    - Client disconnection
-    """
+    """WebSocket endpoint with proper cleanup handling"""
     try:
         await orchestrator.handle_new_connection(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
     finally:
-        await orchestrator.cleanup()
+        # Only cleanup connection-specific resources
+        orchestrator._active_websockets.discard(websocket)
+        for clients in orchestrator.connected_clients.values():
+            clients.discard(websocket)
 
 
 @router.get(

@@ -1,15 +1,11 @@
-export interface AnalysisStatus {
-    status: string;
-    progress: number;
-    currentFile?: string;
-    processedFiles: number;
-    totalFiles: number;
-    error?: string;
-}
+export type RequestStatus = 'pending' | 'running' | 'completed' | 'error' | 'stopped' | 'connected' | 'disconnected' | 'closing';
 
-export interface GraphStats {
-    totalNodes: number;
-    totalEdges: number;
-    nodeTypes: Record<string, number>;
-    edgeTypes: Record<string, number>;
-}
+export type AnalysisProgress = {
+    status: 'pending' | 'running' | 'completed' | 'error';
+    progress: number;
+    processed_files: number;
+    currentFile?: string;
+    error?: string;
+  };
+  
+  

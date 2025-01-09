@@ -20,7 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-# logger.disabled = True
+logger.disabled = True
 
 
 class GitProjectRequest(BaseModel):

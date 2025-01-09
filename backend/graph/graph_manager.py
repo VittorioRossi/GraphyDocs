@@ -317,14 +317,19 @@ class CodeGraphManager:
         return results
 
     async def delete_project(self, project_id: str):
-        # Delete all nodes with project_id and all the relationship and all depths
+        """
+        Delete all nodes and relationships for a project.
+        """
         query = """
-        MATCH (p:Project {id: $project_id})<-[*]-(n)
-        DETACH DELETE n
+        MATCH (n)
+        WHERE n.id = $project_id OR n.project_id = $project_id
+        OPTIONAL MATCH (n)-[*]->(connected)
+        DETACH DELETE n, connected
         """
         async with self.driver.session() as session:
             await session.run(query, project_id=project_id)
 
+            
     async def get_project_graph(self, job_id: str) -> Dict:
         """
         Get the complete graph data for nodes with specific job_id.

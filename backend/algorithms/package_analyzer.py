@@ -17,8 +17,10 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+logger.disabled = True
 
 class PackageAnalyzer:
+    analyzer_type = "package"
     def __init__(self):
         self.processing_queue = ProcessingQueue()
         self.checkpoint_manager = CheckpointManager()
@@ -124,6 +126,7 @@ class PackageAnalyzer:
             async with LanguageServerManager() as lsp_manager:
                 while await self.processing_queue.has_more():
                     current_file = await self.processing_queue.get_next()
+                    logger.info(f"Processing {current_file}")
                     if not current_file:
                         continue
 
@@ -179,7 +182,7 @@ class PackageAnalyzer:
                                     edge = Edge(
                                         source=file_node["id"],
                                         target=project_node["id"],
-                                        type=RelationType.CONTAINS2,
+                                        type=RelationType.CONTAINS,
                                     ).model_dump(mode="json")
                                     self._add_edge_if_new(edges_batch, edge)
 
@@ -253,7 +256,7 @@ class PackageAnalyzer:
                         edges=self._cast_edges(edges_batch),
                         processed_files=processed_files,
                         failed_files=failed_files,
-                        status="structure_complete",
+                        status="in_progress",
                         statistics={"total_files": total_files},
                     )
 
