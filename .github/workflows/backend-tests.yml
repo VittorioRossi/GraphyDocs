@@ -1,0 +1,123 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend-tests.yml'
+  pull_request:
+    branches: [ master, main ]
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/backend-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: graphydb
+          POSTGRES_USER: graphy
+          POSTGRES_PASSWORD: graphydocs
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      neo4j:
+        image: neo4j:5.12
+        env:
+          NEO4J_AUTH: neo4j/graphydocs
+          NEO4J_PLUGINS: '["apoc"]'
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p graphydocs 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install pytest pytest-asyncio pytest-mock
+
+    - name: Install LSP servers
+      run: |
+        cd backend
+        chmod +x lsp_installer.sh
+        ./lsp_installer.sh
+
+    - name: Create .env file
+      run: |
+        cp backend/.env.example backend/.env
+        echo "DATABASE_URL=postgresql+asyncpg://graphy:graphydocs@localhost:5432/graphydb" >> backend/.env
+        echo "NEO4J_URI=bolt://localhost:7687" >> backend/.env
+        echo "NEO4J_USER=neo4j" >> backend/.env
+        echo "NEO4J_PASSWORD=graphydocs" >> backend/.env
+        echo "REDIS_URL=redis://localhost:6379" >> backend/.env
+
+    - name: Wait for services
+      run: |
+        # Wait for PostgreSQL
+        until pg_isready -h localhost -p 5432; do
+          echo "Waiting for PostgreSQL..."
+          sleep 2
+        done
+        
+        # Wait for Neo4j
+        until curl -f http://localhost:7474; do
+          echo "Waiting for Neo4j..."
+          sleep 2
+        done
+        
+        # Test Redis
+        redis-cli -h localhost ping
+
+    - name: Run tests
+      run: |
+        cd backend
+        python -m pytest tests/ -v --tb=short
+      env:
+        DATABASE_URL: postgresql+asyncpg://graphy:graphydocs@localhost:5432/graphydb
+        NEO4J_URI: bolt://localhost:7687
+        NEO4J_USER: neo4j
+        NEO4J_PASSWORD: graphydocs
+        REDIS_URL: redis://localhost:6379
