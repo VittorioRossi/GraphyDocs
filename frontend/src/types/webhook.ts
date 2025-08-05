@@ -10,7 +10,7 @@ export interface BatchData {
 
 export interface WSMessageBase {
     type: string;
-    data: Record<string, any>;
+    data: Record<string, unknown>;
 }
 
 export interface StartAnalysisResponse extends WSMessageBase {
@@ -23,12 +23,12 @@ export interface StartAnalysisResponse extends WSMessageBase {
     };
 }
 
-export interface BatchUpdateMessage extends WSMessageBase {
+export interface BatchUpdateMessage {
     type: 'batch_update';
     data: BatchData;
 }
 
-export interface StatusUpdateMessage extends WSMessageBase {
+export interface StatusUpdateMessage {
     type: 'status_update';
     data: {
         status: RequestStatus;
@@ -36,7 +36,7 @@ export interface StatusUpdateMessage extends WSMessageBase {
     };
 }
 
-export interface ErrorMessage extends WSMessageBase {
+export interface ErrorMessage {
     type: 'error';
     data: {
         message: string;
@@ -44,14 +44,14 @@ export interface ErrorMessage extends WSMessageBase {
     };
 }
 
-export interface AnalysisCompleteMessage extends WSMessageBase {
+export interface AnalysisCompleteMessage {
     type: 'analysis_complete';
     data: {
         job_id: string;
     };
 }
 
-export interface SubscribeMessage extends WSMessageBase {
+export interface SubscribeMessage {
     type: 'subscribe_response';
     data: {
         job_id: string;

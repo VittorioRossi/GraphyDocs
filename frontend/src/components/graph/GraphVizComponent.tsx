@@ -18,7 +18,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   onNodeClick 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const graphRef = useRef<any>(null);
+  const graphRef = useRef<{ zoom: (scale: number) => void; centerAt: (x: number, y: number, ms: number) => void } | null>(null);
   const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
 
   // Transform graph data to match ForceGraph2D format
@@ -39,7 +39,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   // Initial zoom out effect based on graph size
   useEffect(() => {
     if (graphRef.current) {
-      const distance = Math.sqrt(transformedData.nodes.length) * 200;
+      // const distance = Math.sqrt(transformedData.nodes.length) * 200;
       graphRef.current.zoom(0.7);
       graphRef.current.centerAt(0, 0, 1000);
     }

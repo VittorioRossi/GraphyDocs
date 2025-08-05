@@ -4,6 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
+### GitHub Actions
+The project includes automated CI/CD workflows:
+- **Lint**: Runs on all pushes/PRs - uses Ruff for Python (linting + formatting), ESLint for TypeScript
+- **Backend Tests**: Runs on backend changes - full test suite with PostgreSQL, Neo4j, Redis services
+- **Frontend Tests**: Available for frontend changes - runs npm test and build
+
+## Development Commands
+
 ### Environment Setup
 ```bash
 # Initial setup
@@ -25,6 +33,14 @@ docker-compose exec backend pytest -v tests/test_package_analyzer.py  # Single t
 
 # Frontend tests
 docker-compose exec frontend npm test
+
+# Linting
+# Backend (uses Ruff for both linting and formatting)
+docker-compose exec backend ruff check .
+docker-compose exec backend ruff format --check .
+
+# Frontend
+docker-compose exec frontend npm run lint
 ```
 
 ### Service Access Points

@@ -31,7 +31,7 @@ const GraphComponent: React.FC = () => {
     edgeTypes: {}
   });
 
-  const [requestStatus, setRequestStatus] = useState<RequestStatus>('pending');
+  const [, setRequestStatus] = useState<RequestStatus>('pending');
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress>({
     status: 'pending',
     progress: 0,
@@ -138,7 +138,7 @@ const GraphComponent: React.FC = () => {
         setTimeout(() => navigate('/'), 3000);
       }
     },
-    onComplete: (_) => {
+    onComplete: () => {
       console.log('Analysis completed');
       setAnalysisProgress(prev => ({
         ...prev,
