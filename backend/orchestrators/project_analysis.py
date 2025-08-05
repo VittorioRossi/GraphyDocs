@@ -5,7 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Optional, Union
 from uuid import UUID
-import sys 
+import sys
 
 from algorithms.factory import get_analyzer_by_type
 from algorithms.interface import GraphMapper
@@ -35,6 +35,7 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 logger.disabled = True
 
+
 def convert_uuid(obj):
     """Recursively convert UUID objects to strings in nested data structures."""
     if isinstance(obj, dict):
@@ -44,6 +45,7 @@ def convert_uuid(obj):
     elif isinstance(obj, UUID):
         return str(obj)
     return obj
+
 
 class AnalysisStats(BaseModel):
     """
@@ -57,8 +59,9 @@ class AnalysisStats(BaseModel):
 
     progress: int
     processed_files: int
-    total_files: int 
+    total_files: int
     error: str = ""
+
 
 class AnalysisRequest(BaseModel):
     """
@@ -146,7 +149,6 @@ class AnalysisOrchestrator:
         self._disposed: bool = False
 
         self._register_cleanup()
-
 
     async def handle_new_connection(self, websocket: WebSocket):
         """Handle new websocket connection"""
@@ -246,8 +248,12 @@ class AnalysisOrchestrator:
                 self.connected_clients[job_id].add(websocket)
                 logger.info(f"Client auto-subscribed to new job {job_id}")
 
-                return AnalysisResponse(job_id=str(job_id),
-                                        analysis_stats=AnalysisStats(progress=0, processed_files=0, total_files=0)).model_dump(mode="json")
+                return AnalysisResponse(
+                    job_id=str(job_id),
+                    analysis_stats=AnalysisStats(
+                        progress=0, processed_files=0, total_files=0
+                    ),
+                ).model_dump(mode="json")
 
             elif (
                 latest_job.status == JobStatus.COMPLETED
@@ -279,15 +285,18 @@ class AnalysisOrchestrator:
 
         # if there is a checkpoint the _run_analysis will start from there
         task = asyncio.create_task(self._run_analysis(job))
-        task.add_done_callback(lambda t: asyncio.create_task(self._handle_analysis_completion(t, job.id)))
-
+        task.add_done_callback(
+            lambda t: asyncio.create_task(self._handle_analysis_completion(t, job.id))
+        )
 
         return AnalysisResponseRunning(
             job_id=str(job.id),
             partial_graph=await self.graph_manager.get_project_graph(
                 str(job.project_id)
             ),
-            analysis_stats=AnalysisStats(progress=job.progress, processed_files=0, total_files=0)
+            analysis_stats=AnalysisStats(
+                progress=job.progress, processed_files=0, total_files=0
+            ),
         ).model_dump(mode="json")
 
     async def _handle_resume_analysis(self, job: Job) -> AnalysisResponseRunning:
@@ -310,7 +319,11 @@ class AnalysisOrchestrator:
         job_id = str(job_id)
         graph_data = await self.graph_manager.get_project_graph(job_id)
         return AnalysisResponseAlreadyCompleted(
-            job_id=job_id, graph_data=graph_data, analysis_stats=AnalysisStats(progress=100, processed_files=0, total_files=0)
+            job_id=job_id,
+            graph_data=graph_data,
+            analysis_stats=AnalysisStats(
+                progress=100, processed_files=0, total_files=0
+            ),
         ).model_dump(mode="json")
 
     async def _handle_analysis_completion(self, task: asyncio.Task, job_id: UUID):
@@ -320,30 +333,29 @@ class AnalysisOrchestrator:
         except asyncio.CancelledError:
             logger.info(f"Analysis task for job {job_id} was cancelled")
         except Exception as e:
-            logger.error(f"Analysis task for job {job_id} failed: {str(e)}", exc_info=True)
+            logger.error(
+                f"Analysis task for job {job_id} failed: {str(e)}", exc_info=True
+            )
         finally:
             await self.task_manager.remove_task(job_id)
             if job_id in self.analyzers:
                 del self.analyzers[job_id]
 
-
     async def _handle_stop_analysis(self, data: dict):
         """Handle request to stop analysis"""
         job_id = UUID(data["job_id"])
-        
+
         # Cancel the analysis task
         await self.task_manager.cancel_task(job_id)
-        
+
         if job_id in self.analyzers:
             await self.analyzers[job_id].stop()
             await self.job_handler.update_status(job_id, JobStatus.STOPPED)
             return StopAnalysisResponse(
-                job_id=str(job_id), 
-                analysis_stats=AnalysisStats(0)
+                job_id=str(job_id), analysis_stats=AnalysisStats(0)
             ).model_dump(mode="json")
 
         raise JobNotFoundError(f"Job {job_id} not found")
-
 
     async def _handle_get_status(self, data: dict, websocket: WebSocket):
         """Handle request to get the status of a job"""
@@ -351,15 +363,15 @@ class AnalysisOrchestrator:
         job = await self.job_handler.get_job(job_id)
         if not job:
             raise JobNotFoundError(f"Job {job_id} not found")
-        
+
         return {
             "status": job.status,
             "analysis_stats": {
                 "progress": job.progress,
                 "processed_files": 0,
                 "total_files": 0,
-                "error": job.error or ""
-            }
+                "error": job.error or "",
+            },
         }
 
     async def _handle_subscribe(self, data: dict, websocket: WebSocket):
@@ -467,12 +479,19 @@ class AnalysisOrchestrator:
             # Create and store analysis task
             task = asyncio.create_task(self._run_analysis(job))
             await self.task_manager.add_task(job.id, task)
-            task.add_done_callback(lambda t: asyncio.create_task(self._handle_analysis_completion(t, job.id)))
-            
+            task.add_done_callback(
+                lambda t: asyncio.create_task(
+                    self._handle_analysis_completion(t, job.id)
+                )
+            )
+
             return job.id
 
         except Exception as e:
-            logger.error(f"Failed to start analysis for project {project_id}: {str(e)}", exc_info=True)
+            logger.error(
+                f"Failed to start analysis for project {project_id}: {str(e)}",
+                exc_info=True,
+            )
             await self._broadcast(
                 project_id,
                 {
@@ -535,7 +554,7 @@ class AnalysisOrchestrator:
                     "data": {
                         "job_id": str(job.id),
                     },
-                }
+                },
             )
 
         except Exception as e:
@@ -553,7 +572,6 @@ class AnalysisOrchestrator:
         """Broadcast batch updates to connected clients with sequence tracking"""
         if not self.connected_clients[job_id]:
             return
-        
 
         async with self._broadcast_lock:
             sequence = await self.job_handler.increment_sequence(job_id)
@@ -570,10 +588,10 @@ class AnalysisOrchestrator:
                 "edges": [edge.model_dump(mode="json") for edge in batch.edges],
                 "analysis_stats": {
                     "processed_files": batch.processed_files,
-                    "total_files": batch.statistics['total_files'],
+                    "total_files": batch.statistics["total_files"],
                     "error": batch.error,
                 },
-                "sequence": sequence
+                "sequence": sequence,
             }
 
             # Store in Redis with expiration
@@ -620,12 +638,13 @@ class AnalysisOrchestrator:
     def _register_cleanup(self):
         """Register cleanup handler for module reloading"""
         import sys
-        if hasattr(sys.modules[self.__module__], '_cleanup_tasks'):
+
+        if hasattr(sys.modules[self.__module__], "_cleanup_tasks"):
             cleanup_tasks = sys.modules[self.__module__]._cleanup_tasks
         else:
             cleanup_tasks = set()
             sys.modules[self.__module__]._cleanup_tasks = cleanup_tasks
-        
+
         cleanup_tasks.add(self)
         logger.debug("Registered orchestrator for cleanup")
 
@@ -674,6 +693,7 @@ class AnalysisOrchestrator:
             except Exception as e:
                 logger.error(f"Error in Orchestrator __del__: {e}")
 
+
 # Router
 router = APIRouter(
     prefix="/api/v1",
@@ -688,7 +708,7 @@ router = APIRouter(
 # Update the router with cleanup handling
 async def cleanup_orchestrators():
     """Cleanup all orchestrator instances during reload"""
-    if hasattr(sys.modules[__name__], '_cleanup_tasks'):
+    if hasattr(sys.modules[__name__], "_cleanup_tasks"):
         cleanup_tasks = sys.modules[__name__]._cleanup_tasks
         for orchestrator in list(cleanup_tasks):
             try:
@@ -699,11 +719,10 @@ async def cleanup_orchestrators():
 
 
 async def get_orchestrator(
-    db: AsyncSession = Depends(get_db),
-    neo4j: AsyncDriver = Depends(get_graph_db)
+    db: AsyncSession = Depends(get_db), neo4j: AsyncDriver = Depends(get_graph_db)
 ) -> AnalysisOrchestrator:
     await cleanup_orchestrators()
-    
+
     redis_client = Redis(host="redis", port=6379, db=0, decode_responses=True)
     return AnalysisOrchestrator(
         JobHandler(db),
@@ -711,10 +730,10 @@ async def get_orchestrator(
         redis_client,
     )
 
+
 @router.websocket("/ws")
 async def websocket_endpoint(
-    websocket: WebSocket,
-    orchestrator: AnalysisOrchestrator = Depends(get_orchestrator)
+    websocket: WebSocket, orchestrator: AnalysisOrchestrator = Depends(get_orchestrator)
 ):
     """WebSocket endpoint with proper cleanup handling"""
     try:

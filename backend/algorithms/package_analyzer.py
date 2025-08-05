@@ -19,8 +19,10 @@ logger = get_logger(__name__)
 
 logger.disabled = True
 
+
 class PackageAnalyzer:
     analyzer_type = "package"
+
     def __init__(self):
         self.processing_queue = ProcessingQueue()
         self.checkpoint_manager = CheckpointManager()

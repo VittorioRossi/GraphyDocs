@@ -199,7 +199,7 @@ class LanguageServerPoolManager:
                                 pooled_client.process.wait(), timeout=2.0
                             )
                         except asyncio.TimeoutError:
-                            pooled_client.process.kill() 
+                            pooled_client.process.kill()
                             await pooled_client.process.wait()
                 except Exception as e:
                     logger.error(f"Error stopping client: {str(e)}")
@@ -208,7 +208,7 @@ class LanguageServerPoolManager:
                         pooled_client.process.kill()
                         await pooled_client.process.wait()
                     except Exception as e:
-                        logger.error(f"Error killing process: {str(e)}") 
+                        logger.error(f"Error killing process: {str(e)}")
 
             self.servers.pop(language, None)
             self.client_pools.pop(language, None)

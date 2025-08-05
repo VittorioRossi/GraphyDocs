@@ -77,7 +77,7 @@ class FileFilter:
             # Check wildcard patterns against each path component and parents
             if patterns.wildcards and any(
                 any(
-                    fnmatch.fnmatch(f"{'/'.join(parts[i:j+1])}", p)
+                    fnmatch.fnmatch(f"{'/'.join(parts[i : j + 1])}", p)
                     for i in range(len(parts))
                     for j in range(i, len(parts))
                 )

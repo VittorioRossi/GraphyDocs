@@ -46,8 +46,7 @@ class LanguageServerManager:
         except Exception:
             await self.stop_server(language)
             return False
-        
-    
+
     async def stop_servers(self, file_path: str) -> Dict:
         """Stop all servers associated with a file path"""
         stopped_servers = {}
@@ -93,4 +92,3 @@ class LanguageServerManager:
             "cpp": ["clangd"],
         }
         return commands.get(language)
-

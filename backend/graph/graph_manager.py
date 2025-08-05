@@ -329,7 +329,6 @@ class CodeGraphManager:
         async with self.driver.session() as session:
             await session.run(query, project_id=project_id)
 
-            
     async def get_project_graph(self, job_id: str) -> Dict:
         """
         Get the complete graph data for nodes with specific job_id.

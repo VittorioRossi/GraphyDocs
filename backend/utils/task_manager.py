@@ -5,6 +5,7 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class AnalysisTaskManager:
     def __init__(self):
         self.tasks: Dict[UUID, asyncio.Task] = {}
@@ -17,7 +18,7 @@ class AnalysisTaskManager:
         async with self._lock:
             self.tasks[job_id] = task
             logger.debug(f"Added task for job {job_id}")
-            
+
     async def remove_task(self, job_id: UUID):
         async with self._lock:
             if job_id in self.tasks:
@@ -45,10 +46,10 @@ class AnalysisTaskManager:
         """Properly dispose of all tasks"""
         if self._disposed:
             return
-        
+
         self._disposed = True
         logger.info("Disposing TaskManager...")
-        
+
         async with self._lock:
             # Cancel all running tasks
             for job_id, task in list(self.tasks.items()):
@@ -61,9 +62,9 @@ class AnalysisTaskManager:
                         pass
                     except Exception as e:
                         logger.error(f"Error while cancelling task {job_id}: {e}")
-            
+
             self.tasks.clear()
-        
+
         logger.info("TaskManager disposed")
 
     def __del__(self):
