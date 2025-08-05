@@ -2,7 +2,6 @@ import os
 import tempfile
 import shutil
 from typing import Dict, Optional, List, Union
-from pathlib import Path
 from git import Repo, GitCommandError
 from git.cmd import Git
 from dataclasses import dataclass

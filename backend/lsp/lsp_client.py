@@ -26,7 +26,7 @@ class LSPClient:
                 content = await self.reader.read(content_length)
                 response = json.loads(content.decode())
                 await self.response_queue.put(response)
-            except:
+            except Exception:
                 logger.warning("Error while reading LSP response")
 
     async def _read_header(self) -> Dict[str, str]:
@@ -68,7 +68,7 @@ class LSPClient:
             if self.writer:
                 self.writer.close()
                 await self.writer.wait_closed()
-        except:
+        except Exception:
             pass
 
     async def document_symbols(self, uri: str) -> List[Dict[str, Any]]:

@@ -109,7 +109,6 @@ class LanguageServerPoolManager:
 
             # Initialize client
             client = LSPClient(reader, writer)
-            client._process = process
 
             try:
                 await client.initialize("file:///")
@@ -194,22 +193,22 @@ class LanguageServerPoolManager:
                         pooled_client.process.returncode is None
                     ):  # Only if process is still running
                         await pooled_client.client.shutdown()
-                        await pooled_client.process.terminate()  # Add await here
+                        pooled_client.process.terminate()
                         try:
                             await asyncio.wait_for(
                                 pooled_client.process.wait(), timeout=2.0
                             )
                         except asyncio.TimeoutError:
-                            await pooled_client.process.kill()  # Add await here
+                            pooled_client.process.kill() 
                             await pooled_client.process.wait()
                 except Exception as e:
                     logger.error(f"Error stopping client: {str(e)}")
                     # Force kill if normal shutdown fails
                     try:
-                        await pooled_client.process.kill()  # Add await here
+                        pooled_client.process.kill()
                         await pooled_client.process.wait()
-                    except:
-                        logger.error(f"Error killing process: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"Error killing process: {str(e)}") 
 
             self.servers.pop(language, None)
             self.client_pools.pop(language, None)
