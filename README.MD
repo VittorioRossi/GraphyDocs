@@ -9,8 +9,8 @@ GraphyDocs is a tool that converts codebases into interactive graphs using stati
 
 ## Tech Stack
 
-- Frontend: [Your frontend framework/technology]
-- Backend: [Your backend framework/technology]
+- Frontend: TypeScript/React
+- Backend: Python/FastApi
 - Databases:
   - Neo4j (Graph Database)
   - PostgreSQL (Relational Database)
