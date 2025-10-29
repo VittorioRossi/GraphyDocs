@@ -15,7 +15,7 @@ $SUDO apt-get update
 
 # Install clangd
 $SUDO apt-get install -y clangd
-$SUDO update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-14 100
+$SUDO update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-19 100
 
 # Install Python LSP
 pip install 'python-lsp-server[all]'
