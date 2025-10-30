@@ -32,9 +32,7 @@ Frontend	http://localhost:5173
 Backend	http://localhost:8000
 Neo4j	http://localhost:7474
 
-
-⸻
-
+---
 📁 Repo Structure
 
 graphydocs/
@@ -43,7 +41,7 @@ graphydocs/
 ├── docs/       # Architecture notes
 
 
-⸻
+---
 
 🧪 Running Tests
 
@@ -58,7 +56,7 @@ Frontend:
 docker-compose exec frontend npm test
 
 
-⸻
+---
 
 📖 Code Style
 
@@ -74,7 +72,7 @@ npm run format
 npm run lint
 
 
-⸻
+---
 
 🛠 Opening a Pull Request
 	1.	Fork the repository
@@ -86,7 +84,7 @@ npm run lint
 	•	Related Issue(s)
 	•	Screenshots or examples (if applicable)
 
-⸻
+---
 
 🏷 Issue Labels
 
@@ -97,13 +95,13 @@ We use the following labels to help guide contributors:
 
 Check the issues tab to find something to work on.
 
-⸻
+---
 
 🤝 Code of Conduct
 
 All contributors are expected to follow the Code of Conduct.
 
-⸻
+---
 
 🙏 Thank You
 
