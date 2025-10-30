@@ -35,11 +35,12 @@ Neo4j	http://localhost:7474
 ---
 📁 Repo Structure
 
+```bash
 graphydocs/
 ├── frontend/   # React + TypeScript
 ├── backend/    # FastAPI + LSP logic
 ├── docs/       # Architecture notes
-
+```
 
 ---
 
