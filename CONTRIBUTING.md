@@ -28,9 +28,9 @@ docker-compose up -d --build
 Dev Services
 
 Service	URL
-Frontend	http://localhost:5173
-Backend	http://localhost:8000
-Neo4j	http://localhost:7474
+- Frontend	http://localhost:5173
+- Backend	http://localhost:8000
+- Neo4j		http://localhost:7474
 
 ---
 📁 Repo Structure
@@ -50,49 +50,55 @@ graphydocs/
 
 Backend:
 
+```
 docker-compose exec backend pytest
+```
 
 Frontend:
-
+```
 docker-compose exec frontend npm test
-
+```
 
 ---
 
 📖 Code Style
 
 Python (Backend)
-	•	Format with black
-	•	Lint with ruff (optional)
+
+- Format with black
+- Lint with ruff (optional)
 
 JavaScript/TypeScript (Frontend)
-	•	Format with prettier
-	•	Lint with eslint
+- Format with prettier
+	```
+	npm run format
+	```
 
-npm run format
-npm run lint
-
+- Lint with eslint
+	```
+	npm run lint
+	```
 
 ---
 
 🛠 Opening a Pull Request
-	1.	Fork the repository
-	2.	Create a new branch (feature/your-change-name)
-	3.	Write clear commit messages
-	4.	Push your branch and open a PR against main
-	5.	Include:
-	•	What the change does
-	•	Related Issue(s)
-	•	Screenshots or examples (if applicable)
+1. Fork the repository
+2. Create a new branch (feature/your-change-name)
+3.	Write clear commit messages
+4.	Push your branch and open a PR against main
+5.	Include:
+	- What the change does
+	- Related Issue(s)
+	- Screenshots or examples (if applicable)
 
 ---
 
 🏷 Issue Labels
 
 We use the following labels to help guide contributors:
-	•	good first issue – easy starter tasks
-	•	help wanted – looking for help on this
-	•	bug, enhancement, question, etc.
+-	good first issue – easy starter tasks
+-	help wanted – looking for help on this
+-	bug, enhancement, question, etc.
 
 Check the issues tab to find something to work on.
 
@@ -107,5 +113,3 @@ All contributors are expected to follow the Code of Conduct.
 🙏 Thank You
 
 Your contributions make this project better. Whether it’s fixing a typo or building an entire subsystem — you’re helping developers understand their code better.
-
----
